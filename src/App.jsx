@@ -10,6 +10,7 @@ import { ContainerPlanner } from './pages/ContainerPlanner';
 import { ContainerDistribution } from './pages/ContainerDistribution';
 import { ProductDatabase } from './pages/Database';
 import { Approvals } from './pages/Approvals';
+import { AuditHistory } from './pages/AuditHistory';
 import { Export } from './pages/Export';
 import { Profile } from './pages/Profile';
 import { StaffManagement } from './pages/StaffManagement';
@@ -51,6 +52,7 @@ function App() {
               <Route path="planner" element={<ContainerPlanner />} />
               <Route path="distribution" element={<ContainerDistribution />} />
               <Route path="approvals" element={<Approvals />} />
+              <Route path="audit-history" element={<AuditHistory />} />
               <Route path="export" element={<Export />} />
               <Route path="manage-staff" element={<StaffManagement />} />
             </Route>

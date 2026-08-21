@@ -1,21 +1,23 @@
-import { useMemo, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useStore } from '../store/useStore';
 import { 
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, 
-  PieChart, Pie, Cell, AreaChart, Area, ComposedChart} from 'recharts';
-import { Package, Users, Building2, Container as ContainerIcon, ClipboardList, Truck } from 'lucide-react';
+  PieChart, Pie, Cell, AreaChart, Area, ComposedChart
+} from 'recharts';
+import { Package, Users, Building2, Container as ContainerIcon, ClipboardList, Truck, RefreshCw, Loader2 } from 'lucide-react';
+import api from '../services/api';
 
 export const AnalyticsDashboard = () => {
   const user = useStore(state => state.user);
   const navigate = useNavigate();
   
-  const products = useStore(state => state.products);
-  const staff = useStore(state => state.staff);
-  const orders = useStore(state => state.orders);
-  const containers = useStore(state => state.containers);
-  const pendingProducts = useStore(state => state.pendingProducts);
-  const distributions = useStore(state => state.distributions);
+  const [matrixData, setMatrixData] = useState([]);
+  const [staffList, setStaffList] = useState([]);
+  const [containersList, setContainersList] = useState([]);
+  const [pendingList, setPendingList] = useState([]);
+  const [productsList, setProductsList] = useState([]);
+  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
     if (user?.role === 'staff') {
@@ -23,21 +25,42 @@ export const AnalyticsDashboard = () => {
     }
   }, [user, navigate]);
 
+  const loadData = async () => {
+    setLoading(true);
+    try {
+      const [matrix, staff, containers, pending, products] = await Promise.all([
+        api.getOrderMatrix(),
+        api.getStaffList(),
+        api.getContainers(),
+        api.getPendingProducts().catch(() => []),
+        api.getProducts()
+      ]);
+
+      setMatrixData(matrix?.matrix || []);
+      setStaffList(staff || []);
+      setContainersList(containers || []);
+      setPendingList(pending || []);
+      setProductsList(products || []);
+    } catch (err) {
+      console.warn('Failed to load analytics:', err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadData();
+  }, []);
+
   if (user?.role === 'staff') return null;
 
-  const totalQty = orders.reduce((sum, o) => sum + o.quantity, 0);
-  
+  const totalQty = matrixData.reduce((sum, r) => sum + (r.total || 0), 0);
+
   // 1. Data for Orders by Company Bar Chart
   const companyDataMap = {};
-  // Initialize with all companies to show even 0 orders
-  products.forEach(p => {
-    if (!companyDataMap[p.company]) companyDataMap[p.company] = 0;
-  });
-  orders.forEach(o => {
-    const p = products.find(p => p.id === o.productId);
-    if (p) {
-      companyDataMap[p.company] += o.quantity;
-    }
+  matrixData.forEach(row => {
+    if (!companyDataMap[row.company]) companyDataMap[row.company] = 0;
+    companyDataMap[row.company] += row.total || 0;
   });
   const barData = Object.keys(companyDataMap).map(key => ({ 
     name: key, 
@@ -45,134 +68,123 @@ export const AnalyticsDashboard = () => {
   }));
 
   // 2. Data for Staff Orders Area Chart
-  const staffOrdersData = staff.map(s => {
-    const sOrders = orders.filter(o => o.staffId === s.id);
-    const qty = sOrders.reduce((sum, o) => sum + o.quantity, 0);
+  const staffOrdersData = staffList.map(s => {
+    const sId = s.id || s._id;
+    let qty = 0;
+    matrixData.forEach(r => {
+      qty += Number(r[sId] || 0);
+    });
     return { name: s.name.split(' ')[0], Items: qty };
   });
 
-  // 3. Data for Container Space Utilization Pie Chart (Cuft)
+  // 3. Container Space Utilization
   let totalCapacityCuft = 0;
   let usedCapacityCuft = 0;
-  containers.forEach(c => {
-    totalCapacityCuft += c.capacity;
-    c.loadedProducts.forEach(lp => {
-      const p = products.find(prod => prod.id === lp.productId);
-      if (p) usedCapacityCuft += lp.quantity * p.cuft;
-    });
+  containersList.forEach(c => {
+    totalCapacityCuft += Number(c.capacity_cuft || c.capacityCuft || 2400);
+    usedCapacityCuft += Number(c.used_cuft || c.usedCuft || 0);
   });
   const containerData = [
     { name: 'Used Space (Cuft)', value: Number(usedCapacityCuft.toFixed(2)) },
     { name: 'Free Space (Cuft)', value: Number(Math.max(0, totalCapacityCuft - usedCapacityCuft).toFixed(2)) }
   ];
-  const PIE_COLORS = ['#3b82f6', '#e5e7eb'];
+  const PIE_COLORS = ['#4f46e5', '#e2e8f0'];
 
-  // 4. Data for Top 5 Products
-  const topProducts = useMemo(() => {
-    return products.map(p => {
-      const pOrders = orders.filter(o => o.productId === p.id);
-      const qty = pOrders.reduce((sum, o) => sum + o.quantity, 0);
-      return { name: p.model, qty, company: p.company };
-    }).sort((a, b) => b.qty - a.qty).slice(0, 5);
-  }, [products, orders]);
-
-  // Distribution Stats
-  const totalDistributed = distributions.reduce((sum, dist) => {
-    return sum + dist.staffDistributions.reduce((s, sd) => s + sd.quantity, 0);
-  }, 0);
+  // 4. Top 5 Products
+  const topProducts = [...matrixData].sort((a, b) => (b.total || 0) - (a.total || 0)).slice(0, 5).map(p => ({
+    name: p.model,
+    qty: p.total,
+    company: p.company
+  }));
 
   return (
     <div className="space-y-6 max-w-7xl mx-auto pb-10">
-      <div>
-        <h1 className="text-xl font-semibold text-gray-900">Analytics Overview</h1>
-        <p className="text-gray-500 text-sm mt-1">Comprehensive data insights for your Order Management System.</p>
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-gradient-to-r from-indigo-600 to-indigo-800 p-6 rounded-2xl shadow-md text-white">
+        <div>
+          <div className="flex items-center gap-2">
+            <h1 className="text-xl font-bold text-white">Executive Analytics Overview</h1>
+            {loading && <Loader2 className="w-4 h-4 animate-spin text-indigo-200" />}
+          </div>
+          <p className="text-indigo-100 text-sm mt-1 opacity-90">Real-time business insights, container capacity tracking, and orders overview.</p>
+        </div>
+        <button onClick={loadData} className="bg-white/10 hover:bg-white/20 text-white p-2.5 rounded-xl">
+          <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+        </button>
       </div>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-        <div className="bg-white p-4 rounded-xl shadow-sm hover:shadow-md transition-shadow duration-300 border border-gray-200 flex flex-col justify-center">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+        <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-200 flex flex-col justify-center">
           <div className="flex items-center space-x-3 mb-2">
             <div className="w-8 h-8 bg-indigo-100 rounded-full flex items-center justify-center text-indigo-600">
               <Package className="w-4 h-4" />
             </div>
-            <p className="text-xs font-medium text-gray-500">Total Items</p>
+            <p className="text-xs font-semibold text-gray-500">Total Units Ordered</p>
           </div>
-          <p className="text-xl font-semibold text-gray-900">{totalQty}</p>
+          <p className="text-xl font-bold text-gray-900">{totalQty}</p>
         </div>
         
-        <div className="bg-white p-4 rounded-xl shadow-sm hover:shadow-md transition-shadow duration-300 border border-gray-200 flex flex-col justify-center">
+        <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-200 flex flex-col justify-center">
           <div className="flex items-center space-x-3 mb-2">
             <div className="w-8 h-8 bg-indigo-100 rounded-full flex items-center justify-center text-indigo-600">
               <Building2 className="w-4 h-4" />
             </div>
-            <p className="text-xs font-medium text-gray-500">Suppliers</p>
+            <p className="text-xs font-semibold text-gray-500">Suppliers</p>
           </div>
-          <p className="text-xl font-semibold text-gray-900">{new Set(products.map(p => p.company)).size}</p>
+          <p className="text-xl font-bold text-gray-900">{Object.keys(companyDataMap).length}</p>
         </div>
         
-        <div className="bg-white p-4 rounded-xl shadow-sm hover:shadow-md transition-shadow duration-300 border border-gray-200 flex flex-col justify-center">
+        <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-200 flex flex-col justify-center">
           <div className="flex items-center space-x-3 mb-2">
-            <div className="w-8 h-8 bg-green-100 rounded-full flex items-center justify-center text-green-600">
+            <div className="w-8 h-8 bg-emerald-100 rounded-full flex items-center justify-center text-emerald-600">
               <Users className="w-4 h-4" />
             </div>
-            <p className="text-xs font-medium text-gray-500">Active Staff</p>
+            <p className="text-xs font-semibold text-gray-500">Active Staff</p>
           </div>
-          <p className="text-xl font-semibold text-gray-900">{staff.length}</p>
+          <p className="text-xl font-bold text-gray-900">{staffList.length}</p>
         </div>
         
-        <div className="bg-white p-4 rounded-xl shadow-sm hover:shadow-md transition-shadow duration-300 border border-gray-200 flex flex-col justify-center">
+        <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-200 flex flex-col justify-center">
           <div className="flex items-center space-x-3 mb-2">
-            <div className="w-8 h-8 bg-orange-100 rounded-full flex items-center justify-center text-orange-600">
+            <div className="w-8 h-8 bg-amber-100 rounded-full flex items-center justify-center text-amber-600">
               <ContainerIcon className="w-4 h-4" />
             </div>
-            <p className="text-xs font-medium text-gray-500">Containers</p>
+            <p className="text-xs font-semibold text-gray-500">Containers</p>
           </div>
-          <p className="text-xl font-semibold text-gray-900">{containers.length}</p>
+          <p className="text-xl font-bold text-gray-900">{containersList.length}</p>
         </div>
 
-        <div className="bg-white p-4 rounded-xl shadow-sm hover:shadow-md transition-shadow duration-300 border border-gray-200 flex flex-col justify-center">
+        <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-200 flex flex-col justify-center">
           <div className="flex items-center space-x-3 mb-2">
-            <div className="w-8 h-8 bg-purple-100 rounded-full flex items-center justify-center text-purple-600">
-              <Truck className="w-4 h-4" />
-            </div>
-            <p className="text-xs font-medium text-gray-500">Distributed</p>
-          </div>
-          <p className="text-xl font-semibold text-gray-900">{totalDistributed}</p>
-        </div>
-
-        <div className="bg-white p-4 rounded-xl shadow-sm hover:shadow-md transition-shadow duration-300 border border-gray-200 flex flex-col justify-center">
-          <div className="flex items-center space-x-3 mb-2">
-            <div className="w-8 h-8 bg-red-100 rounded-full flex items-center justify-center text-red-600">
+            <div className="w-8 h-8 bg-rose-100 rounded-full flex items-center justify-center text-rose-600">
               <ClipboardList className="w-4 h-4" />
             </div>
-            <p className="text-xs font-medium text-gray-500">Pending Req.</p>
+            <p className="text-xs font-semibold text-gray-500">Pending Approvals</p>
           </div>
-          <p className="text-xl font-semibold text-gray-900">{pendingProducts.length}</p>
+          <p className="text-xl font-bold text-gray-900">{pendingList.length}</p>
         </div>
       </div>
 
-      {/* Main Charts Row 1 */}
+      {/* Main Charts */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Orders by Supplier Bar Chart */}
-        <div className="bg-white p-6 rounded-xl shadow-sm hover:shadow-md transition-shadow duration-300 border border-gray-200 flex flex-col">
-          <h2 className="text-lg font-semibold text-gray-900 mb-6">Order Volume by Supplier</h2>
-          <div className="flex-1 min-h-[300px]">
+        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 flex flex-col">
+          <h2 className="text-base font-bold text-gray-900 mb-6">Order Volume by Supplier</h2>
+          <div className="flex-1 min-h-[260px]">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={barData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f3f4f6" />
                 <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#6b7280', fontSize: 12}} dy={10} />
                 <YAxis axisLine={false} tickLine={false} tick={{fill: '#6b7280', fontSize: 12}} />
-                <Tooltip cursor={{fill: '#f9fafb'}} contentStyle={{borderRadius: '8px', border: '1px solid #e5e7eb', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)'}} />
-                <Bar dataKey="Orders" fill="#3b82f6" radius={[4, 4, 0, 0]} barSize={40} />
+                <Tooltip />
+                <Bar dataKey="Orders" fill="#4f46e5" radius={[4, 4, 0, 0]} barSize={40} />
               </BarChart>
             </ResponsiveContainer>
           </div>
         </div>
 
-        {/* Staff Orders Area Chart */}
-        <div className="bg-white p-6 rounded-xl shadow-sm hover:shadow-md transition-shadow duration-300 border border-gray-200 flex flex-col">
-          <h2 className="text-lg font-semibold text-gray-900 mb-6">Items Ordered per Staff Member</h2>
-          <div className="flex-1 min-h-[300px]">
+        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 flex flex-col">
+          <h2 className="text-base font-bold text-gray-900 mb-6">Items Ordered per Salesperson</h2>
+          <div className="flex-1 min-h-[260px]">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={staffOrdersData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                 <defs>
@@ -184,7 +196,7 @@ export const AnalyticsDashboard = () => {
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f3f4f6" />
                 <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#6b7280', fontSize: 12}} dy={10} />
                 <YAxis axisLine={false} tickLine={false} tick={{fill: '#6b7280', fontSize: 12}} />
-                <Tooltip contentStyle={{borderRadius: '8px', border: '1px solid #e5e7eb', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)'}} />
+                <Tooltip />
                 <Area type="monotone" dataKey="Items" stroke="#10b981" strokeWidth={3} fillOpacity={1} fill="url(#colorItems)" />
               </AreaChart>
             </ResponsiveContainer>
@@ -192,53 +204,41 @@ export const AnalyticsDashboard = () => {
         </div>
       </div>
 
-      {/* Main Charts Row 2 */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        
-        {/* Container Space Utilization */}
-        <div className="bg-white p-6 rounded-xl shadow-sm hover:shadow-md transition-shadow duration-300 border border-gray-200 flex flex-col">
-          <h2 className="text-lg font-semibold text-gray-900 mb-2">Global Container Space</h2>
-          <p className="text-xs text-gray-500 mb-6">Total Cuft utilization across all active containers.</p>
-          <div className="flex-1 min-h-[250px] flex items-center justify-center relative">
-            <ResponsiveContainer width="100%" height="100%">
+        {/* Container Space */}
+        <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 flex flex-col">
+          <h2 className="text-base font-bold text-gray-900 mb-1">Container Capacity Utilization</h2>
+          <p className="text-xs text-gray-500 mb-4">Total Cuft utilization across all active containers.</p>
+          <div className="flex-1 min-h-[220px] flex items-center justify-center relative">
+            <ResponsiveContainer width="100%" height={220}>
               <PieChart>
                 <Pie
                   data={containerData}
                   cx="50%"
                   cy="50%"
-                  innerRadius={70}
-                  outerRadius={100}
+                  innerRadius={60}
+                  outerRadius={85}
                   paddingAngle={2}
                   dataKey="value"
-                  stroke="none"
                 >
                   {containerData.map((entry, index) => (
                     <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
                   ))}
                 </Pie>
-                <Tooltip contentStyle={{borderRadius: '8px', border: '1px solid #e5e7eb', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)'}} />
+                <Tooltip />
               </PieChart>
             </ResponsiveContainer>
-            {/* Center Text */}
             <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-              <span className="text-xl font-semibold text-gray-900">{totalCapacityCuft}</span>
-              <span className="text-xs font-medium text-gray-500">Total Cuft</span>
+              <span className="text-lg font-bold text-gray-900">{totalCapacityCuft}</span>
+              <span className="text-[10px] text-gray-400 uppercase font-bold">Total Cuft</span>
             </div>
-          </div>
-          <div className="flex justify-center space-x-6 mt-4">
-            {containerData.map((entry, index) => (
-              <div key={entry.name} className="flex items-center">
-                <div className="w-3 h-3 rounded-full mr-2" style={{ backgroundColor: PIE_COLORS[index] }}></div>
-                <span className="text-sm font-medium text-gray-600">{entry.name}</span>
-              </div>
-            ))}
           </div>
         </div>
 
-        {/* Top 5 Ordered Products */}
-        <div className="lg:col-span-2 bg-white p-6 rounded-xl shadow-sm hover:shadow-md transition-shadow duration-300 border border-gray-200 flex flex-col">
-          <h2 className="text-lg font-semibold text-gray-900 mb-6">Top 5 Most Ordered Products</h2>
-          <div className="flex-1 min-h-[250px]">
+        {/* Top 5 Products */}
+        <div className="lg:col-span-2 bg-white p-6 rounded-xl shadow-sm border border-gray-200 flex flex-col">
+          <h2 className="text-base font-bold text-gray-900 mb-4">Top 5 Most Ordered Products</h2>
+          <div className="flex-1 min-h-[220px]">
             <ResponsiveContainer width="100%" height="100%">
               <ComposedChart
                 layout="vertical"
@@ -248,22 +248,12 @@ export const AnalyticsDashboard = () => {
                 <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} stroke="#f3f4f6" />
                 <XAxis type="number" axisLine={false} tickLine={false} tick={{fill: '#6b7280', fontSize: 12}} />
                 <YAxis dataKey="name" type="category" axisLine={false} tickLine={false} tick={{fill: '#374151', fontSize: 12, fontWeight: 600}} width={120} />
-                <Tooltip 
-                  cursor={{fill: '#f9fafb'}} 
-                  contentStyle={{borderRadius: '8px', border: '1px solid #e5e7eb', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)'}} 
-                />
-                <Bar dataKey="qty" name="Quantity Ordered" fill="#8b5cf6" radius={[0, 4, 4, 0]} barSize={24}>
-                  {
-                    topProducts.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={index === 0 ? '#7c3aed' : '#a78bfa'} />
-                    ))
-                  }
-                </Bar>
+                <Tooltip />
+                <Bar dataKey="qty" name="Quantity Ordered" fill="#8b5cf6" radius={[0, 4, 4, 0]} barSize={24} />
               </ComposedChart>
             </ResponsiveContainer>
           </div>
         </div>
-
       </div>
     </div>
   );

@@ -1,123 +1,172 @@
-import React, { useState } from 'react';
-import { useStore } from '../store/useStore';
-import { Building2, Download } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Building2, Download, RefreshCw, Loader2, Package } from 'lucide-react';
+import api from '../services/api';
 
 export const CompanyView = () => {
- const products = useStore(state => state.products);
- const staff = useStore(state => state.staff);
- const orders = useStore(state => state.orders);
+  const [companies, setCompanies] = useState(['PREMIER', 'MIDEA', 'SAMSUNG', 'SONY']);
+  const [selectedCompany, setSelectedCompany] = useState('PREMIER');
+  const [companyData, setCompanyData] = useState(null);
+  const [loading, setLoading] = useState(false);
 
- const companies = [...new Set(products.map(p => p.company))];
- const [selectedCompany, setSelectedCompany] = useState(companies[0] || '');
+  const loadCompanies = async () => {
+    try {
+      const list = await api.getCompanies();
+      if (list?.length > 0) {
+        setCompanies(list);
+        if (!list.includes(selectedCompany)) setSelectedCompany(list[0]);
+      }
+    } catch (e) {
+      console.warn('Companies list load error:', e.message);
+    }
+  };
 
- const getCompanyOrders = () => {
- const companyProducts = products.filter(p => p.company === selectedCompany);
- 
- let totalQty = 0;
- const ordersByProduct = companyProducts.map(product => {
- const ordersForProduct = orders.filter(o => o.productId === product.id);
- 
- const staffBreakdown = ordersForProduct.map(order => {
- const s = staff.find(st => st.id === order.staffId);
- return {
- staffName: s ? s.name : 'Unknown',
- quantity: order.quantity
- };
- });
+  const loadCompanyDetails = async () => {
+    if (!selectedCompany) return;
+    setLoading(true);
+    try {
+      const data = await api.getCompanyView(selectedCompany);
+      setCompanyData(data);
+    } catch (err) {
+      console.warn('Failed to load company view:', err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
 
- const productTotalQty = ordersForProduct.reduce((sum, o) => sum + o.quantity, 0);
- totalQty += productTotalQty;
+  useEffect(() => {
+    loadCompanies();
+  }, []);
 
- return {
- ...product,
- staffBreakdown,
- totalQty
- };
- }).filter(p => p.totalQty > 0);
+  useEffect(() => {
+    loadCompanyDetails();
+  }, [selectedCompany]);
 
- return { ordersByProduct, totalQty };
- };
+  const products = (companyData?.products || []).filter(p => p.totalQty > 0);
 
- const { ordersByProduct, totalQty } = getCompanyOrders();
+  const handleExportCSV = () => {
+    if (!products.length) return;
+    const headers = ['Model', 'Description', 'Cuft', 'Total Quantity', 'Total Cuft', 'Staff Breakdown'];
+    const rows = products.map(p => [
+      p.model,
+      `"${(p.description || '').replace(/"/g, '""')}"`,
+      p.cuft,
+      p.totalQty,
+      p.totalCuft,
+      `"${(p.buyers || []).map(b => `${b.staffName}: ${b.quantity}`).join(', ')}"`
+    ]);
+    const csvContent = "data:text/csv;charset=utf-8," + [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `Company_Orders_${selectedCompany}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
 
- return (
- <div className="space-y-6 max-w-5xl mx-auto">
- <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-gradient-to-r from-indigo-600 to-indigo-800 p-6 rounded-2xl shadow-md text-white">
- <div>
- <h1 className="text-xl font-semibold text-white ">Company View</h1>
- <p className="text-indigo-100 text-sm mt-1.5 opacity-90">Supplier-wise breakdown of all products ordered.</p>
- </div>
- <div className="flex flex-col sm:flex-row gap-3 w-full md:w-auto">
- <select 
- value={selectedCompany}
- onChange={(e) => setSelectedCompany(e.target.value)}
- className="flex-1 md:flex-none border-transparent rounded-lg shadow-sm text-sm py-2 px-3 focus:ring-2 focus:ring-white focus:border-white border bg-white/10 text-white [&>option]:text-gray-900"
- >
- {companies.map(c => <option key={c} value={c}>{c}</option>)}
- </select>
- <button className="bg-white text-indigo-700 px-5 py-2 rounded-lg text-sm font-semibold hover:bg-indigo-50 shadow-md flex items-center justify-center transition-transform hover:scale-105">
- <Download className="w-4 h-4 mr-2" /> Export
- </button>
- </div>
- </div>
+  return (
+    <div className="space-y-6 max-w-5xl mx-auto mb-10">
+      {/* Header */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-gradient-to-r from-indigo-600 to-indigo-800 p-6 rounded-2xl shadow-md text-white">
+        <div>
+          <div className="flex items-center gap-2">
+            <h1 className="text-xl font-bold text-white">Company View</h1>
+            {loading && <Loader2 className="w-4 h-4 animate-spin text-indigo-200" />}
+          </div>
+          <p className="text-indigo-100 text-sm mt-1 opacity-90">
+            Supplier-wise breakdown of all products ordered with who ordered each item.
+          </p>
+        </div>
 
- <div className="bg-white rounded-2xl shadow-sm hover:shadow-md transition-shadow duration-300 border border-gray-200 p-6 sm:p-8 mb-8 relative overflow-hidden">
- <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-indigo-500 to-indigo-600"></div>
- <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-8 pb-6 border-b border-gray-100 gap-4">
- <div className="flex items-center space-x-5">
- <div className="w-14 h-14 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center shadow-inner border border-indigo-100/50">
- <Building2 className="w-7 h-7" />
- </div>
- <div>
- <h2 className="text-xl font-semibold text-gray-900 ">{selectedCompany}</h2>
- <p className="text-gray-500 text-sm font-medium mt-0.5">Supplier / Manufacturer</p>
- </div>
- </div>
- <div className="text-left sm:text-right bg-gray-50 px-5 py-3 rounded-xl border border-gray-100">
- <p className="text-xs text-gray-500 font-semibold uppercase tracking-wider mb-1">Total Items Ordered</p>
- <p className="text-xl font-semibold text-indigo-600">{totalQty}</p>
- </div>
- </div>
+        <div className="flex gap-2 w-full md:w-auto">
+          <select 
+            value={selectedCompany}
+            onChange={(e) => setSelectedCompany(e.target.value)}
+            className="flex-1 md:flex-none border border-transparent rounded-lg text-sm py-2 px-3 focus:ring-2 focus:ring-white bg-white/10 text-white [&>option]:text-gray-900 focus:outline-none"
+          >
+            {companies.map(c => <option key={c} value={c}>{c}</option>)}
+          </select>
 
- <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
- {ordersByProduct.map(product => (
- <div key={product.id} className="border border-gray-100 rounded-xl overflow-x-auto overflow-hidden shadow-sm hover:shadow-md transition-all duration-300 group bg-white">
- <div className="bg-gradient-to-r from-gray-50 to-white px-5 py-4 border-b border-gray-100 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
- <div>
- <h3 className="text-base font-semibold text-gray-900 group-hover:text-indigo-600 transition-colors">{product.model}</h3>
- <p className="text-sm text-gray-500 font-medium mt-0.5">{product.description}</p>
- </div>
- <div className="text-left sm:text-right w-full sm:w-auto">
- <span className="text-sm font-semibold text-indigo-700 bg-indigo-50 px-4 py-1.5 rounded-full inline-flex items-center border border-indigo-100 shadow-sm">
- Total: {product.totalQty}
- </span>
- </div>
- </div>
- <div className="p-5">
- <h4 className="text-xs font-semibold text-gray-400 uppercase tracking-widest mb-4">Ordered By Staff</h4>
- <div className="flex flex-wrap gap-3">
- {product.staffBreakdown.map((breakdown, idx) => (
- <div key={idx} className="flex items-center space-x-3 bg-white border border-gray-200 shadow-sm rounded-lg px-4 py-2 text-sm hover:border-indigo-200 transition-colors">
- <div className="w-6 h-6 rounded-full bg-indigo-100 flex items-center justify-center text-indigo-700 font-semibold text-xs">
- {breakdown.staffName.charAt(0)}
- </div>
- <span className="font-semibold text-gray-700">{breakdown.staffName}</span>
- <span className="text-gray-300 text-lg leading-none">|</span>
- <span className="font-semibold text-indigo-600">{breakdown.quantity}</span>
- </div>
- ))}
- </div>
- </div>
- </div>
- ))}
- {ordersByProduct.length === 0 && (
- <div className="col-span-1 lg:col-span-2 text-center py-16 bg-gray-50 rounded-xl border border-dashed border-gray-300">
- <Building2 className="w-12 h-12 text-gray-300 mx-auto mb-3" />
- <p className="text-gray-500 font-medium">No active orders found for this company.</p>
- </div>
- )}
- </div>
- </div>
- </div>
- );
+          <button 
+            onClick={loadCompanyDetails} 
+            className="bg-white/10 hover:bg-white/20 text-white p-2 rounded-lg"
+          >
+            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+          </button>
+
+          <button 
+            onClick={handleExportCSV}
+            className="bg-white text-indigo-700 px-4 py-2 rounded-lg text-sm font-semibold hover:bg-indigo-50 shadow-md flex items-center transition-transform hover:scale-105"
+          >
+            <Download className="w-4 h-4 mr-1.5" /> Export
+          </button>
+        </div>
+      </div>
+
+      {/* Supplier Card */}
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 sm:p-8 relative overflow-hidden">
+        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-8 pb-6 border-b border-gray-100 gap-4">
+          <div className="flex items-center space-x-4">
+            <div className="w-14 h-14 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center border border-indigo-100">
+              <Building2 className="w-7 h-7" />
+            </div>
+            <div>
+              <h2 className="text-xl font-bold text-gray-900">{selectedCompany}</h2>
+              <p className="text-gray-500 text-xs font-medium">Supplier Catalog Breakdown</p>
+            </div>
+          </div>
+
+          <div className="flex gap-4">
+            <div className="bg-gray-50 px-4 py-2.5 rounded-xl border border-gray-100 text-center">
+              <p className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">Total Quantity</p>
+              <p className="text-lg font-bold text-indigo-600">{companyData?.totalCompanyQty || 0} pcs</p>
+            </div>
+            <div className="bg-gray-50 px-4 py-2.5 rounded-xl border border-gray-100 text-center">
+              <p className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">Total Cuft</p>
+              <p className="text-lg font-bold text-emerald-600">{companyData?.totalCompanyCuft || 0} cuft</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Products Grid */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {products.map(product => (
+            <div key={product.productId} className="border border-gray-200 rounded-xl overflow-hidden shadow-sm bg-white hover:border-indigo-300 transition-colors">
+              <div className="bg-gray-50/70 px-5 py-3 border-b border-gray-100 flex justify-between items-center">
+                <div>
+                  <h3 className="text-sm font-bold text-gray-900">{product.model}</h3>
+                  <p className="text-xs text-gray-500">{product.description}</p>
+                </div>
+                <span className="text-xs font-bold text-indigo-700 bg-indigo-50 px-3 py-1 rounded-full border border-indigo-100">
+                  Total: {product.totalQty} ({product.totalCuft} cuft)
+                </span>
+              </div>
+
+              <div className="p-4">
+                <h4 className="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-2">Ordered By Staff</h4>
+                <div className="flex flex-wrap gap-2">
+                  {(product.buyers || []).map((b, idx) => (
+                    <div key={idx} className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-lg px-3 py-1 text-xs">
+                      <div className="w-5 h-5 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center font-bold text-[10px]">
+                        {b.staffName?.charAt(0) || 'S'}
+                      </div>
+                      <span className="font-semibold text-gray-700">{b.staffName}</span>
+                      <span className="font-bold text-indigo-600">x{b.quantity}</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          ))}
+
+          {products.length === 0 && (
+            <div className="col-span-1 lg:col-span-2 text-center py-12 bg-gray-50 rounded-xl border border-dashed border-gray-300">
+              <Package className="w-10 h-10 text-gray-300 mx-auto mb-2" />
+              <p className="text-gray-500 font-medium text-sm">No active orders recorded for {selectedCompany}.</p>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
 };

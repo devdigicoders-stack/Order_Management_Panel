@@ -61,6 +61,7 @@ export const Layout = () => {
  { name: 'Container Planner', path: '/planner', icon: Container, roles: ['admin'] },
  { name: 'Container Distribution', path: '/distribution', icon: Truck, roles: ['admin'] },
  { name: 'Approvals', path: '/approvals', icon: ClipboardCheck, roles: ['admin'] },
+ { name: 'Audit History', path: '/audit-history', icon: Clock, roles: ['admin'] },
  { name: 'Export Data', path: '/export', icon: FileText, roles: ['admin'] },
  { name: 'Manage Staff', path: '/manage-staff', icon: UserCog, roles: ['admin'] },
  ];

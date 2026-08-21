@@ -1,96 +1,125 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { useStore } from '../store/useStore';
-import { Clock, Search, Filter, AlertCircle, CheckCircle } from 'lucide-react';
+import { Clock, Search, RefreshCw, Loader2, CheckCircle } from 'lucide-react';
+import api from '../services/api';
 
 export const PendingItems = () => {
- const user = useStore(state => state.user);
- const products = useStore(state => state.products);
- const orders = useStore(state => state.orders);
- const distributions = useStore(state => state.distributions);
+  const user = useStore(state => state.user);
+  const [pendingItems, setPendingItems] = useState([]);
+  const [totalPendingQty, setTotalPendingQty] = useState(0);
+  const [totalPendingCuft, setTotalPendingCuft] = useState(0);
+  const [search, setSearch] = useState('');
+  const [loading, setLoading] = useState(false);
 
- // Calculate pending quantities
- const pendingData = products.map(product => {
- // Total Ordered (only submitted or approved orders for this staff)
- const staffOrders = orders.filter(o => o.staffId === user?.id && o.productId === product.id && (o.status === 'submitted' || o.status === 'approved'));
- const totalOrdered = staffOrders.reduce((sum, o) => sum + o.quantity, 0);
+  const loadPending = async () => {
+    setLoading(true);
+    try {
+      const data = await api.getPendingItems();
+      setPendingItems(data?.pendingItems || []);
+      setTotalPendingQty(data?.totalPendingQty || 0);
+      setTotalPendingCuft(data?.totalPendingCuft || 0);
+    } catch (err) {
+      console.warn('Failed to load pending items:', err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
 
- // Total Received
- let totalReceived = 0;
- distributions.forEach(dist => {
- if (dist.productId === product.id) {
- const staffDist = dist.staffDistributions.find(s => s.staffId === user?.id);
- if (staffDist) {
- totalReceived += staffDist.quantity;
- }
- }
- });
+  useEffect(() => {
+    loadPending();
+  }, []);
 
- const pending = totalOrdered - totalReceived;
- return { ...product, totalOrdered, totalReceived, pending };
- }).filter(item => item.pending > 0);
+  const filtered = pendingItems.filter(item => {
+    if (!search) return true;
+    const q = search.toLowerCase();
+    return item.model?.toLowerCase().includes(q) || item.description?.toLowerCase().includes(q) || item.company?.toLowerCase().includes(q);
+  });
 
- return (
- <div className="max-w-6xl mx-auto space-y-6 h-full flex flex-col">
- <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
- <div>
- <h1 className="text-xl font-semibold text-gray-900">Pending Items</h1>
- <p className="text-gray-500 text-sm mt-1">Items you've ordered that haven't been received yet.</p>
- </div>
- </div>
+  return (
+    <div className="max-w-6xl mx-auto space-y-6 h-full flex flex-col mb-10">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-gradient-to-r from-indigo-600 to-indigo-800 p-6 rounded-2xl shadow-md text-white">
+        <div>
+          <div className="flex items-center gap-2">
+            <h1 className="text-xl font-bold text-white">My Pending Items</h1>
+            {loading && <Loader2 className="w-4 h-4 animate-spin text-indigo-200" />}
+          </div>
+          <p className="text-indigo-100 text-sm mt-1 opacity-90">
+            Products you have ordered that have not yet been distributed from arrived containers.
+          </p>
+        </div>
 
- <div className="bg-white rounded-xl shadow-sm hover:shadow-md transition-shadow duration-300 border border-gray-200 overflow-x-auto overflow-hidden flex-1 flex flex-col min-h-0">
- <div className="p-4 border-b border-gray-200 bg-gray-50 flex items-center justify-between">
- <div className="relative w-64">
- <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
- <Search className="h-4 w-4 text-gray-400" />
- </div>
- <input 
- type="text"
- className="block w-full pl-10 pr-3 py-2 border border-gray-300 rounded-md leading-5 bg-white placeholder-gray-500 focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
- placeholder="Search products..."
- />
- </div>
- <button className="flex items-center text-sm text-gray-600 hover:text-gray-900 px-3 py-2 border border-gray-300 rounded-md bg-white">
- <Filter className="w-4 h-4 mr-2" /> Filter
- </button>
- </div>
+        <div className="flex gap-4">
+          <div className="bg-white/10 px-4 py-2 rounded-xl text-center">
+            <p className="text-[10px] text-indigo-200 uppercase font-bold">Pending Qty</p>
+            <p className="text-lg font-bold text-white">{totalPendingQty} pcs</p>
+          </div>
+          <div className="bg-white/10 px-4 py-2 rounded-xl text-center">
+            <p className="text-[10px] text-indigo-200 uppercase font-bold">Pending Cuft</p>
+            <p className="text-lg font-bold text-white">{totalPendingCuft} cuft</p>
+          </div>
+          <button onClick={loadPending} className="bg-white/10 hover:bg-white/20 text-white p-2.5 rounded-xl self-center">
+            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+          </button>
+        </div>
+      </div>
 
- <div className="overflow-auto flex-1 relative">
- <table className="min-w-full divide-y divide-gray-200">
- <thead className="bg-gray-50 sticky top-0 z-10 shadow-sm">
- <tr>
- <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Product Model</th>
- <th className="px-6 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Company</th>
- <th className="px-6 py-3 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider">Total Ordered</th>
- <th className="px-6 py-3 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider">Total Received</th>
- <th className="px-6 py-3 text-center text-xs font-semibold text-orange-600 uppercase tracking-wider">Pending Quantity</th>
- </tr>
- </thead>
- <tbody className="bg-white divide-y divide-gray-200">
- {pendingData.map((item) => (
- <tr key={item.id} className="hover:bg-gray-50 transition-colors">
- <td className="px-6 py-4 whitespace-nowrap text-sm font-semibold text-gray-900">{item.model}</td>
- <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{item.company}</td>
- <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 text-center font-medium">{item.totalOrdered}</td>
- <td className="px-6 py-4 whitespace-nowrap text-sm text-green-600 text-center font-medium">{item.totalReceived}</td>
- <td className="px-6 py-4 whitespace-nowrap text-sm text-orange-600 text-center font-semibold">{item.pending}</td>
- </tr>
- ))}
- {pendingData.length === 0 && (
- <tr>
- <td colSpan="5" className="px-6 py-12 text-center">
- <div className="flex flex-col items-center justify-center text-gray-500">
- <CheckCircle className="w-12 h-12 mb-3 text-gray-300" />
- <p className="text-sm font-medium text-gray-900">All caught up!</p>
- <p className="text-sm">You have no pending items. Everything ordered has been received.</p>
- </div>
- </td>
- </tr>
- )}
- </tbody>
- </table>
- </div>
- </div>
- </div>
- );
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden flex-1 flex flex-col min-h-0">
+        <div className="p-4 border-b border-gray-200 bg-gray-50 flex items-center justify-between">
+          <div className="relative w-72">
+            <Search className="h-4 w-4 text-gray-400 absolute left-3 top-3" />
+            <input 
+              type="text"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="block w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg text-sm bg-white focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+              placeholder="Search pending products..."
+            />
+          </div>
+          <span className="text-xs text-gray-500 font-mono">
+            Auto-calculated: <span className="font-bold text-amber-600">Pending = Ordered − Received</span>
+          </span>
+        </div>
+
+        <div className="overflow-auto flex-1 relative">
+          <table className="min-w-full divide-y divide-gray-200 text-xs">
+            <thead className="bg-gray-50 sticky top-0 z-10 shadow-sm">
+              <tr>
+                <th className="px-6 py-3 text-left font-semibold text-gray-600 uppercase">Product Model</th>
+                <th className="px-6 py-3 text-left font-semibold text-gray-600 uppercase">Company</th>
+                <th className="px-6 py-3 text-center font-semibold text-gray-600 uppercase">Total Ordered</th>
+                <th className="px-6 py-3 text-center font-semibold text-emerald-600 uppercase">Total Received</th>
+                <th className="px-6 py-3 text-center font-semibold text-amber-600 uppercase">Still Pending</th>
+                <th className="px-6 py-3 text-right font-semibold text-gray-600 uppercase">Pending Cuft</th>
+              </tr>
+            </thead>
+            <tbody className="bg-white divide-y divide-gray-200">
+              {filtered.map((item) => (
+                <tr key={item.productId} className="hover:bg-gray-50 transition-colors">
+                  <td className="px-6 py-3 whitespace-nowrap text-sm font-bold text-gray-900 font-mono">{item.model}</td>
+                  <td className="px-6 py-3 whitespace-nowrap text-gray-500">{item.company}</td>
+                  <td className="px-6 py-3 whitespace-nowrap text-center font-bold text-gray-700">{item.ordered}</td>
+                  <td className="px-6 py-3 whitespace-nowrap text-center font-bold text-emerald-600">{item.received}</td>
+                  <td className="px-6 py-3 whitespace-nowrap text-center font-bold text-amber-600 bg-amber-50/40 text-sm">
+                    {item.pending}
+                  </td>
+                  <td className="px-6 py-3 whitespace-nowrap text-right font-semibold text-gray-700">{item.pendingCuft}</td>
+                </tr>
+              ))}
+              {filtered.length === 0 && (
+                <tr>
+                  <td colSpan="6" className="px-6 py-12 text-center">
+                    <div className="flex flex-col items-center justify-center text-gray-500">
+                      <CheckCircle className="w-10 h-10 mb-2 text-emerald-500" />
+                      <p className="text-sm font-bold text-gray-900">No Pending Items</p>
+                      <p className="text-xs text-gray-400">All your ordered items have been fulfilled and received.</p>
+                    </div>
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
 };

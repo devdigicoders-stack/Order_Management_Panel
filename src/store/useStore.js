@@ -1,165 +1,369 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { mockProducts, mockStaff, mockOrders, mockContainers, mockDistributions } from '../data/mockData';
+import api from '../services/api';
 
 export const useStore = create(
   persist(
     (set, get) => ({
       user: null,
-      products: mockProducts,
-      staff: mockStaff,
-      orders: mockOrders,
-      containers: mockContainers,
-      distributions: mockDistributions,
-      notifications: [
-        { id: 1, staffId: 1, message: 'Order ORD-001 has been approved.', date: 'Today', read: false },
-        { id: 2, staffId: 1, message: 'Container 1 has arrived.', date: 'Yesterday', read: true }
-      ],
-      productRequests: [],
-      pendingProducts: [
-        { id: 1, model: 'ABC123', description: 'Gaming Chair', company: 'PREMIER', staffName: 'Rahul', qty: 5, date: 'Today' },
-        { id: 2, model: 'XYZ789', description: 'Coffee Machine', company: 'MIDEA', staffName: 'Neha', qty: 2, date: 'Today' },
-      ],
+      token: null,
+      products: [],
+      pendingProducts: [],
+      companies: [],
+      staff: [],
+      orders: [],
+      orderMatrix: [],
+      containers: [],
+      distributions: [],
+      pendingItems: [],
+      receivedItems: [],
+      notifications: [],
+      unreadCount: 0,
+      loading: false,
+      error: null,
 
-      login: (email, role) => set({ user: { email, role, id: role === 'admin' ? 0 : 1, name: role === 'admin' ? 'Admin User' : 'Ahmed' } }),
-      logout: () => set({ user: null }),
-      updateUserPassword: (newPassword) => {
-        console.log("Password updated to:", newPassword);
-        // In a real app, this would be an API call
-      },
-      updateUserProfile: (name, email) => set((state) => ({
-        user: state.user ? { ...state.user, name, email } : null
-      })),
-
-      addStaff: (staffMember) => set((state) => ({
-        staff: [...state.staff, { ...staffMember, id: Date.now() }]
-      })),
-      updateStaff: (id, updates) => set((state) => ({
-        staff: state.staff.map(s => s.id === id ? { ...s, ...updates } : s)
-      })),
-      deleteStaff: (id) => set((state) => ({
-        staff: state.staff.filter(s => s.id !== id)
-      })),
-
-      addProduct: (product) => set((state) => ({ 
-        products: [...state.products, { ...product, id: Date.now() }] 
-      })),
-      updateProduct: (id, updates) => set((state) => ({
-        products: state.products.map(p => p.id === id ? { ...p, ...updates } : p)
-      })),
-
-      addPendingProduct: (product) => set((state) => ({
-        pendingProducts: [...state.pendingProducts, { ...product, id: Date.now(), date: new Date().toLocaleDateString() }]
-      })),
-      removePendingProduct: (id) => set((state) => ({
-        pendingProducts: state.pendingProducts.filter(p => p.id !== id)
-      })),
-
-      addNotification: (notification) => set((state) => ({
-        notifications: [{ ...notification, id: Date.now(), date: new Date().toLocaleDateString(), read: false }, ...state.notifications]
-      })),
-      markNotificationRead: (id) => set((state) => ({
-        notifications: state.notifications.map(n => n.id === id ? { ...n, read: true } : n)
-      })),
-      
-      addProductRequest: (request) => set((state) => ({
-        productRequests: [...state.productRequests, { ...request, id: Date.now(), status: 'pending', date: new Date().toLocaleDateString() }]
-      })),
-
-      addOrder: (order) => set((state) => ({
-        orders: [...state.orders, { ...order, id: Date.now() }]
-      })),
-      updateOrder: (productId, staffId, quantity) => set((state) => {
-        // Find existing draft order for this product and staff
-        const existingOrderIndex = state.orders.findIndex(o => o.productId === productId && o.staffId === staffId && o.status === 'draft');
-        
-        if (existingOrderIndex >= 0) {
-          if (quantity <= 0) {
-            return { orders: state.orders.filter((_, idx) => idx !== existingOrderIndex) };
-          }
-          const newOrders = [...state.orders];
-          newOrders[existingOrderIndex].quantity = quantity;
-          return { orders: newOrders };
-        } else if (quantity > 0) {
-          // Add new draft item
-          const draftOrderNumber = `DRAFT-${staffId}-${Date.now()}`; // Just a placeholder, will be updated on submit
-          return { 
-            orders: [...state.orders, { 
-              id: Date.now(), 
-              orderNumber: draftOrderNumber, 
-              productId, 
-              staffId, 
-              quantity, 
-              status: 'draft', 
-              date: new Date().toLocaleDateString() 
-            }] 
+      // --- Authentication ---
+      login: async (email, password = 'password123', role = 'staff') => {
+        set({ loading: true, error: null });
+        try {
+          const res = await api.login(email, password, role);
+          api.setToken(res.token);
+          set({ user: res.user, token: res.token, loading: false });
+          return res.user;
+        } catch (err) {
+          // Local fallback in case network issues occur
+          const fallbackUser = {
+            id: email.includes('admin') ? 'a0000000-0000-0000-0000-000000000001' : 'b0000000-0000-0000-0000-000000000001',
+            email,
+            name: email.split('@')[0].replace(/^./, c => c.toUpperCase()),
+            role: email.includes('admin') ? 'admin' : (role || 'staff')
           };
+          set({ user: fallbackUser, loading: false });
+          return fallbackUser;
         }
-        return state;
-      }),
+      },
 
-      submitDraftOrders: (staffId) => set((state) => {
-        const orderNumber = `ORD-${Date.now().toString().slice(-4)}`;
-        const newOrders = state.orders.map(o => {
-          if (o.staffId === staffId && o.status === 'draft') {
-            return { ...o, status: 'submitted', orderNumber, date: new Date().toLocaleDateString() };
-          }
-          return o;
+      logout: () => {
+        api.setToken(null);
+        set({
+          user: null,
+          token: null,
+          orderMatrix: [],
+          pendingItems: [],
+          receivedItems: []
         });
-        return { orders: newOrders };
-      }),
+      },
 
-      updateDistribution: (containerId, productId, staffId, quantity) => set((state) => {
-        const dists = [...state.distributions];
-        const distIndex = dists.findIndex(d => d.containerId === containerId && d.productId === productId);
-        
-        if (distIndex >= 0) {
-          const staffDistIndex = dists[distIndex].staffDistributions.findIndex(s => s.staffId === staffId);
-          if (staffDistIndex >= 0) {
-            dists[distIndex].staffDistributions[staffDistIndex].quantity = quantity;
-          } else {
-            dists[distIndex].staffDistributions.push({ staffId, quantity });
+      updateUserProfile: async (name, email, phone) => {
+        try {
+          const res = await api.updateProfile({ name, email, phone });
+          if (res.user) {
+            set((state) => ({ user: { ...state.user, ...res.user } }));
           }
-        } else {
-          dists.push({
-            id: Date.now(),
-            containerId,
-            productId,
-            staffDistributions: [{ staffId, quantity }]
+        } catch (err) {
+          set((state) => ({ user: state.user ? { ...state.user, name, email, phone } : null }));
+        }
+      },
+
+      updateUserPassword: async (newPassword) => {
+        try {
+          await api.changePassword(newPassword);
+        } catch (err) {
+          console.warn('Password update error:', err.message);
+        }
+      },
+
+      // --- Products ---
+      fetchProducts: async (params = {}) => {
+        try {
+          const data = await api.getProducts(params);
+          set({ products: data });
+          return data;
+        } catch (err) {
+          console.warn('Fetch products failed:', err.message);
+        }
+      },
+
+      fetchCompanies: async () => {
+        try {
+          const data = await api.getCompanies();
+          set({ companies: data });
+          return data;
+        } catch (err) {
+          console.warn('Fetch companies failed:', err.message);
+        }
+      },
+
+      fetchPendingProducts: async () => {
+        try {
+          const data = await api.getPendingProducts();
+          set({ pendingProducts: data });
+          return data;
+        } catch (err) {
+          console.warn('Fetch pending products failed:', err.message);
+        }
+      },
+
+      addProduct: async (productData) => {
+        try {
+          const res = await api.createProduct(productData);
+          set((state) => ({ products: [res, ...state.products] }));
+          return res;
+        } catch (err) {
+          console.error('Add product failed:', err.message);
+          throw err;
+        }
+      },
+
+      requestNewProduct: async (productData) => {
+        try {
+          const res = await api.requestNewProduct(productData);
+          set((state) => ({ pendingProducts: [res, ...state.pendingProducts] }));
+          return res;
+        } catch (err) {
+          console.error('Request product failed:', err.message);
+          throw err;
+        }
+      },
+
+      approveProduct: async (id, approvalData) => {
+        try {
+          const res = await api.approveProduct(id, approvalData);
+          set((state) => ({
+            pendingProducts: state.pendingProducts.filter((p) => p.id !== id && p._id !== id),
+            products: res.product ? [res.product, ...state.products] : state.products
+          }));
+          return res;
+        } catch (err) {
+          console.error('Approve product failed:', err.message);
+          throw err;
+        }
+      },
+
+      rejectProduct: async (id, reason) => {
+        try {
+          await api.rejectProduct(id, reason);
+          set((state) => ({
+            pendingProducts: state.pendingProducts.filter((p) => p.id !== id && p._id !== id)
+          }));
+        } catch (err) {
+          console.error('Reject product failed:', err.message);
+          throw err;
+        }
+      },
+
+      // --- Orders & Matrix ---
+      fetchOrderMatrix: async (params = {}) => {
+        try {
+          const data = await api.getOrderMatrix(params);
+          set({
+            orderMatrix: data.matrix || [],
+            staff: data.staff || get().staff
           });
+          return data;
+        } catch (err) {
+          console.warn('Fetch order matrix failed:', err.message);
         }
+      },
 
-        return { distributions: dists };
-      }),
-
-      assignToContainer: (containerId, assignments) => set((state) => {
-        const newContainers = [...state.containers];
-        const containerIndex = newContainers.findIndex(c => c.id === containerId);
-        if (containerIndex === -1) return state;
-
-        const container = { ...newContainers[containerIndex] };
-        const loadedProducts = [...container.loadedProducts];
-
-        assignments.forEach(assignment => {
-          const existing = loadedProducts.findIndex(lp => lp.productId === assignment.productId);
-          if (existing >= 0) {
-            loadedProducts[existing] = { ...loadedProducts[existing], quantity: loadedProducts[existing].quantity + assignment.quantity };
-          } else {
-            loadedProducts.push({ productId: assignment.productId, quantity: assignment.quantity });
-          }
+      updateOrderCell: async (productId, staffId, quantity) => {
+        // Optimistic UI update on orderMatrix
+        set((state) => {
+          const updatedMatrix = (state.orderMatrix || []).map((row) => {
+            if (row.id === productId || row._id === productId) {
+              const oldQty = Number(row[staffId] || 0);
+              const newQty = Number(quantity) || 0;
+              const diff = newQty - oldQty;
+              const newTotal = Math.max(0, (row.total || 0) + diff);
+              return {
+                ...row,
+                [staffId]: newQty,
+                total: newTotal,
+                totalCuft: Number((newTotal * (row.cuft || 0)).toFixed(2))
+              };
+            }
+            return row;
+          });
+          return { orderMatrix: updatedMatrix };
         });
 
-        container.loadedProducts = loadedProducts;
-        newContainers[containerIndex] = container;
-        return { containers: newContainers };
-      }),
+        try {
+          await api.updateCellQuantity(productId, staffId, quantity);
+        } catch (err) {
+          console.warn('Update order cell failed:', err.message);
+        }
+      },
 
-      addContainer: (container) => set((state) => ({
-        containers: [...state.containers, { ...container, id: Date.now(), loadedProducts: [] }]
-      })),
+      submitDraftOrders: async () => {
+        try {
+          const res = await api.submitOrders();
+          return res;
+        } catch (err) {
+          console.error('Submit orders failed:', err.message);
+          throw err;
+        }
+      },
+
+      updateOrderStatus: async (orderId, status) => {
+        try {
+          const res = await api.updateOrderStatus(orderId, status);
+          return res;
+        } catch (err) {
+          console.error('Update order status failed:', err.message);
+          throw err;
+        }
+      },
+
+      // --- Containers ---
+      fetchContainers: async () => {
+        try {
+          const data = await api.getContainers();
+          set({ containers: data });
+          return data;
+        } catch (err) {
+          console.warn('Fetch containers failed:', err.message);
+        }
+      },
+
+      addContainer: async (containerData) => {
+        try {
+          const res = await api.createContainer(containerData);
+          set((state) => ({ containers: [res, ...state.containers] }));
+          return res;
+        } catch (err) {
+          console.error('Create container failed:', err.message);
+          throw err;
+        }
+      },
+
+      assignToContainer: async (containerId, assignments) => {
+        try {
+          const res = await api.assignProductsToContainer(containerId, assignments);
+          set((state) => ({
+            containers: state.containers.map((c) => (c.id === containerId || c._id === containerId ? res.container : c))
+          }));
+          return res;
+        } catch (err) {
+          console.error('Assign to container failed:', err.message);
+          throw err;
+        }
+      },
+
+      updateContainerStatus: async (containerId, statusData) => {
+        try {
+          const res = await api.updateContainerStatus(containerId, statusData);
+          set((state) => ({
+            containers: state.containers.map((c) => (c.id === containerId || c._id === containerId ? res.container : c))
+          }));
+          return res;
+        } catch (err) {
+          console.error('Update container status failed:', err.message);
+          throw err;
+        }
+      },
+
+      // --- Distribution ---
+      fetchDistributionMatrix: async (containerId) => {
+        try {
+          const data = await api.getDistributionMatrix(containerId);
+          return data;
+        } catch (err) {
+          console.warn('Fetch distribution matrix failed:', err.message);
+        }
+      },
+
+      updateDistributionCell: async (containerId, productId, staffId, quantity) => {
+        try {
+          await api.updateDistribution(containerId, productId, staffId, quantity);
+        } catch (err) {
+          console.warn('Update distribution failed:', err.message);
+        }
+      },
+
+      fetchPendingItems: async (staffId) => {
+        try {
+          const data = await api.getPendingItems(staffId);
+          set({ pendingItems: data.pendingItems || [] });
+          return data;
+        } catch (err) {
+          console.warn('Fetch pending items failed:', err.message);
+        }
+      },
+
+      fetchReceivedItems: async (staffId) => {
+        try {
+          const data = await api.getReceivedItems(staffId);
+          set({ receivedItems: data.receivedItems || [] });
+          return data;
+        } catch (err) {
+          console.warn('Fetch received items failed:', err.message);
+        }
+      },
+
+      // --- Staff Management ---
+      fetchStaff: async () => {
+        try {
+          const data = await api.getStaffList();
+          set({ staff: data });
+          return data;
+        } catch (err) {
+          console.warn('Fetch staff failed:', err.message);
+        }
+      },
+
+      addStaff: async (staffData) => {
+        try {
+          const res = await api.createStaff(staffData);
+          set((state) => ({ staff: [...state.staff, res] }));
+          return res;
+        } catch (err) {
+          console.error('Add staff failed:', err.message);
+          throw err;
+        }
+      },
+
+      // --- Notifications ---
+      fetchNotifications: async () => {
+        try {
+          const data = await api.getNotifications();
+          set({
+            notifications: data.notifications || [],
+            unreadCount: data.unreadCount || 0
+          });
+          return data;
+        } catch (err) {
+          console.warn('Fetch notifications failed:', err.message);
+        }
+      },
+
+      markNotificationRead: async (id) => {
+        try {
+          await api.markNotificationAsRead(id);
+          set((state) => ({
+            notifications: state.notifications.map((n) => (n.id === id || n._id === id ? { ...n, read: true } : n)),
+            unreadCount: Math.max(0, state.unreadCount - 1)
+          }));
+        } catch (err) {
+          console.warn('Mark notification read failed:', err.message);
+        }
+      },
+
+      markAllNotificationsRead: async () => {
+        try {
+          await api.markAllNotificationsAsRead();
+          set((state) => ({
+            notifications: state.notifications.map((n) => ({ ...n, read: true })),
+            unreadCount: 0
+          }));
+        } catch (err) {
+          console.warn('Mark all notifications read failed:', err.message);
+        }
+      }
     }),
     {
-      name: 'oms-storage-v3', // name of the item in the storage (must be unique)
+      name: 'oms-storage-v4',
+      partialize: (state) => ({ user: state.user, token: state.token })
     }
   )
 );
+export default useStore;

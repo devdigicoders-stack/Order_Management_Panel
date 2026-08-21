@@ -1,154 +1,151 @@
-import React, { useState } from 'react';
-import { useStore } from '../store/useStore';
-import { User, Download } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { User, Download, RefreshCw, Loader2, PackageCheck, Clock } from 'lucide-react';
+import api from '../services/api';
 
 export const StaffView = () => {
- const staffList = useStore(state => state.staff);
- const products = useStore(state => state.products);
- const orders = useStore(state => state.orders);
- const distributions = useStore(state => state.distributions);
+  const [staffList, setStaffList] = useState([]);
+  const [selectedStaffId, setSelectedStaffId] = useState('');
+  const [staffData, setStaffData] = useState(null);
+  const [loading, setLoading] = useState(false);
 
- const [selectedStaff, setSelectedStaff] = useState(staffList[0]?.id);
+  const loadStaff = async () => {
+    try {
+      const list = await api.getStaffList();
+      setStaffList(list || []);
+      if (list?.length > 0 && !selectedStaffId) {
+        setSelectedStaffId(list[0].id || list[0]._id);
+      }
+    } catch (err) {
+      console.warn('Failed to load staff:', err.message);
+    }
+  };
 
- const getStaffOrders = () => {
- const staffOrders = orders.filter(o => o.staffId === selectedStaff);
- 
- const grouped = {};
- let totalQty = 0;
- let totalCuft = 0;
- let totalPending = 0;
- let totalReceived = 0;
+  const loadStaffDetails = async () => {
+    if (!selectedStaffId) return;
+    setLoading(true);
+    try {
+      const data = await api.getStaffView(selectedStaffId);
+      setStaffData(data);
+    } catch (err) {
+      console.warn('Failed to load staff details:', err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
 
- staffOrders.forEach(order => {
- const product = products.find(p => p.id === order.productId);
- if (!product) return;
+  useEffect(() => {
+    loadStaff();
+  }, []);
 
- // Calculate how much was distributed to this staff for this product
- let received = 0;
- distributions.forEach(dist => {
- if (dist.productId === product.id) {
- const sd = dist.staffDistributions.find(s => s.staffId === selectedStaff);
- if (sd) received += sd.quantity;
- }
- });
+  useEffect(() => {
+    loadStaffDetails();
+  }, [selectedStaffId]);
 
- const pending = order.quantity - received;
+  const breakdown = staffData?.breakdown || {};
+  const currentStaff = staffList.find(s => (s.id || s._id) === selectedStaffId);
 
- if (!grouped[product.company]) {
- grouped[product.company] = [];
- }
- 
- grouped[product.company].push({
- ...product,
- ordered: order.quantity,
- received,
- pending,
- totalCuft: order.quantity * product.cuft
- });
+  return (
+    <div className="space-y-6 max-w-5xl mx-auto mb-10">
+      {/* Header */}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-gradient-to-r from-indigo-600 to-indigo-800 p-6 rounded-2xl shadow-md text-white">
+        <div>
+          <div className="flex items-center gap-2">
+            <h1 className="text-xl font-bold text-white">Salesperson Order Breakdown</h1>
+            {loading && <Loader2 className="w-4 h-4 animate-spin text-indigo-200" />}
+          </div>
+          <p className="text-indigo-100 text-sm mt-1 opacity-90">
+            Individual salesperson order summary grouped by supplier companies.
+          </p>
+        </div>
 
- totalQty += order.quantity;
- totalCuft += order.quantity * product.cuft;
- totalReceived += received;
- totalPending += pending;
- });
+        <div className="flex gap-2 w-full md:w-auto">
+          <select 
+            value={selectedStaffId}
+            onChange={(e) => setSelectedStaffId(e.target.value)}
+            className="flex-1 md:flex-none border border-transparent rounded-lg text-sm py-2 px-3 focus:ring-2 focus:ring-white bg-white/10 text-white [&>option]:text-gray-900 focus:outline-none"
+          >
+            {staffList.map(s => (
+              <option key={s.id || s._id} value={s.id || s._id}>{s.name}</option>
+            ))}
+          </select>
 
- return { grouped, totalQty, totalCuft, totalReceived, totalPending };
- };
+          <button 
+            onClick={loadStaffDetails}
+            className="bg-white/10 hover:bg-white/20 text-white p-2 rounded-lg"
+          >
+            <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+          </button>
+        </div>
+      </div>
 
- const { grouped, totalQty, totalCuft, totalReceived, totalPending } = getStaffOrders();
- const staffName = staffList.find(s => s.id === selectedStaff)?.name;
+      {/* Staff Card */}
+      <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 sm:p-8">
+        <div className="flex flex-wrap items-center justify-between mb-6 pb-6 border-b border-gray-100 gap-6">
+          <div className="flex items-center space-x-4">
+            <div className="w-14 h-14 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center border border-indigo-100">
+              <User className="w-7 h-7" />
+            </div>
+            <div>
+              <h2 className="text-xl font-bold text-gray-900">{currentStaff?.name || 'Salesperson'}</h2>
+              <p className="text-gray-500 text-xs">{currentStaff?.email || ''}</p>
+            </div>
+          </div>
 
- return (
- <div className="space-y-6 max-w-5xl mx-auto">
- <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
- <div>
- <h1 className="text-xl font-semibold text-gray-900">Staff View & Pending Orders</h1>
- <p className="text-gray-500 text-sm mt-1">Detailed breakdown of orders placed and fulfilled.</p>
- </div>
- <div className="flex space-x-3">
- <select 
- value={selectedStaff}
- onChange={(e) => setSelectedStaff(Number(e.target.value))}
- className="border-gray-300 rounded-md shadow-sm text-sm py-2 px-3 focus:ring-indigo-500 focus:border-indigo-500 border bg-white"
- >
- {staffList.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
- </select>
- <button className="bg-indigo-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-indigo-700 shadow-sm flex items-center">
- <Download className="w-4 h-4 mr-2" /> Export
- </button>
- </div>
- </div>
+          <div className="flex gap-4 text-center">
+            <div className="bg-gray-50 px-4 py-2.5 rounded-xl border border-gray-100">
+              <p className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">Total Quantity</p>
+              <p className="text-lg font-bold text-indigo-600">{staffData?.totalQuantity || 0} pcs</p>
+            </div>
+            <div className="bg-gray-50 px-4 py-2.5 rounded-xl border border-gray-100">
+              <p className="text-[10px] text-gray-500 font-bold uppercase tracking-wider">Total Cuft</p>
+              <p className="text-lg font-bold text-emerald-600">{staffData?.totalCubicFeet || 0} cuft</p>
+            </div>
+          </div>
+        </div>
 
- <div className="bg-white rounded-xl shadow-sm hover:shadow-md transition-shadow duration-300 border border-gray-200 p-6">
- <div className="flex flex-wrap items-center justify-between mb-6 pb-6 border-b border-gray-100 gap-6">
- <div className="flex items-center space-x-4">
- <div className="w-12 h-12 rounded-full bg-indigo-100 text-indigo-600 flex items-center justify-center">
- <User className="w-6 h-6" />
- </div>
- <div>
- <h2 className="text-lg font-semibold text-gray-900">{staffName}</h2>
- <p className="text-gray-500 text-sm">Salesperson</p>
- </div>
- </div>
- <div className="flex flex-wrap gap-6 text-right">
- <div>
- <p className="text-xs text-gray-500 font-medium uppercase tracking-wider">Ordered</p>
- <p className="text-xl font-semibold text-gray-900">{totalQty}</p>
- </div>
- <div>
- <p className="text-xs text-gray-500 font-medium uppercase tracking-wider">Received</p>
- <p className="text-xl font-semibold text-green-600">{totalReceived}</p>
- </div>
- <div>
- <p className="text-xs text-gray-500 font-medium uppercase tracking-wider">Pending</p>
- <p className="text-xl font-semibold text-red-600">{totalPending}</p>
- </div>
- <div>
- <p className="text-xs text-gray-500 font-medium uppercase tracking-wider">Total Cuft</p>
- <p className="text-xl font-semibold text-indigo-600">{totalCuft.toFixed(2)}</p>
- </div>
- </div>
- </div>
+        {/* Company Groups */}
+        <div className="space-y-6">
+          {Object.entries(breakdown).map(([company, items]) => (
+            <div key={company} className="border border-gray-200 rounded-xl overflow-hidden shadow-sm">
+              <div className="bg-gray-50 px-4 py-3 border-b border-gray-200 flex justify-between items-center">
+                <span className="font-bold text-gray-900 text-sm">{company}</span>
+                <span className="text-xs text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded font-mono font-bold">
+                  {items.reduce((s, i) => s + (i.quantity || 0), 0)} items
+                </span>
+              </div>
 
- <div className="space-y-8">
- {Object.entries(grouped).map(([company, items]) => (
- <div key={company}>
- <h3 className="text-base font-semibold text-gray-900 mb-4 ">{company}</h3>
- <div className="overflow-x-auto overflow-hidden rounded-lg border border-gray-200">
- <table className="min-w-full divide-y divide-gray-200">
- <thead className="bg-gray-50">
- <tr>
- <th className="px-4 py-3 text-left text-xs font-semibold text-gray-600 uppercase tracking-wider">Model</th>
- <th className="px-4 py-3 text-center text-xs font-semibold text-gray-600 uppercase tracking-wider">Ordered</th>
- <th className="px-4 py-3 text-center text-xs font-semibold text-green-600 uppercase tracking-wider">Received</th>
- <th className="px-4 py-3 text-center text-xs font-semibold text-red-600 uppercase tracking-wider">Pending</th>
- <th className="px-4 py-3 text-right text-xs font-semibold text-gray-600 uppercase tracking-wider">Total Cuft</th>
- </tr>
- </thead>
- <tbody className="bg-white divide-y divide-gray-200">
- {items.map(item => (
- <tr key={item.id} className="hover:bg-gray-50">
- <td className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">{item.model}</td>
- <td className="px-4 py-3 whitespace-nowrap text-sm text-center font-semibold text-gray-700">{item.ordered}</td>
- <td className="px-4 py-3 whitespace-nowrap text-sm text-center font-semibold text-green-600">{item.received}</td>
- <td className="px-4 py-3 whitespace-nowrap text-sm text-center font-semibold text-red-600">
- {item.pending > 0 ? item.pending : <span className="text-gray-300">-</span>}
- </td>
- <td className="px-4 py-3 whitespace-nowrap text-sm text-right text-indigo-600 font-medium">{item.totalCuft.toFixed(2)}</td>
- </tr>
- ))}
- </tbody>
- </table>
- </div>
- </div>
- ))}
- {Object.keys(grouped).length === 0 && (
- <div className="text-center py-12">
- <p className="text-gray-500">No orders found for this salesperson.</p>
- </div>
- )}
- </div>
- </div>
- </div>
- );
+              <table className="min-w-full divide-y divide-gray-200 text-xs">
+                <thead className="bg-gray-50/50">
+                  <tr>
+                    <th className="px-4 py-2 text-left font-semibold text-gray-600">Model</th>
+                    <th className="px-4 py-2 text-left font-semibold text-gray-600">Description</th>
+                    <th className="px-4 py-2 text-center font-semibold text-gray-600">Quantity</th>
+                    <th className="px-4 py-2 text-center font-semibold text-gray-600">Unit Cuft</th>
+                    <th className="px-4 py-2 text-right font-semibold text-gray-600">Total Cuft</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-100 bg-white">
+                  {items.map((item, idx) => (
+                    <tr key={idx} className="hover:bg-gray-50">
+                      <td className="px-4 py-2.5 font-bold text-gray-900">{item.model}</td>
+                      <td className="px-4 py-2.5 text-gray-600">{item.description}</td>
+                      <td className="px-4 py-2.5 text-center font-bold text-indigo-600">{item.quantity}</td>
+                      <td className="px-4 py-2.5 text-center text-gray-500">{item.unitCuft}</td>
+                      <td className="px-4 py-2.5 text-right font-semibold text-emerald-600">{item.totalCuft}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ))}
+
+          {Object.keys(breakdown).length === 0 && (
+            <div className="text-center py-12 text-gray-400 text-sm">
+              No orders found for this salesperson.
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
 };
