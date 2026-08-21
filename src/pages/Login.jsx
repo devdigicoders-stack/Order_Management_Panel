@@ -69,7 +69,7 @@ export const Login = () => {
                 {...register('email')}
                 type="email"
                 className="appearance-none block w-full px-4 py-3 border border-gray-200 rounded-xl shadow-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent sm:text-sm transition-all bg-gray-50 focus:bg-white"
-                placeholder="admin@oms.com or ahmed@oms.com"
+                placeholder="name@example.com"
               />
               {errors.email && <p className="mt-1.5 text-sm text-red-500">{errors.email.message}</p>}
             </div>
@@ -81,7 +81,6 @@ export const Login = () => {
               <input
                 {...register('password')}
                 type="password"
-                defaultValue="password123"
                 className="appearance-none block w-full px-4 py-3 border border-gray-200 rounded-xl shadow-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent sm:text-sm transition-all bg-gray-50 focus:bg-white"
                 placeholder="••••••••"
               />
@@ -99,16 +98,6 @@ export const Login = () => {
               </button>
             </div>
           </form>
-
-          {/* Quick Demo logins helper */}
-          <div className="mt-6 pt-6 border-t border-gray-100 w-full text-center">
-            <p className="text-xs text-gray-400 mb-2 font-medium">Quick Demo Accounts:</p>
-            <div className="flex justify-center gap-2 text-xs">
-              <span className="bg-indigo-50 text-indigo-700 px-2 py-1 rounded font-mono">admin@oms.com</span>
-              <span className="bg-gray-100 text-gray-700 px-2 py-1 rounded font-mono">ahmed@oms.com</span>
-            </div>
-          </div>
-
         </div>
       </div>
     </div>
