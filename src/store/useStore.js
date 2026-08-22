@@ -23,23 +23,17 @@ export const useStore = create(
       error: null,
 
       // --- Authentication ---
-      login: async (email, password = 'password123', role = 'staff') => {
+      login: async (email, password = '123456', role = 'admin') => {
         set({ loading: true, error: null });
         try {
           const res = await api.login(email, password, role);
           api.setToken(res.token);
-          set({ user: res.user, token: res.token, loading: false });
+          set({ user: res.user, token: res.token, loading: false, error: null });
           return res.user;
         } catch (err) {
-          // Local fallback in case network issues occur
-          const fallbackUser = {
-            id: email.includes('admin') ? 'a0000000-0000-0000-0000-000000000001' : 'b0000000-0000-0000-0000-000000000001',
-            email,
-            name: email.split('@')[0].replace(/^./, c => c.toUpperCase()),
-            role: email.includes('admin') ? 'admin' : (role || 'staff')
-          };
-          set({ user: fallbackUser, loading: false });
-          return fallbackUser;
+          api.setToken(null);
+          set({ user: null, token: null, loading: false, error: err.message });
+          throw err;
         }
       },
 

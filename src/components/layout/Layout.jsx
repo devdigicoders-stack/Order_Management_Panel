@@ -144,46 +144,71 @@ export const Layout = () => {
  )}
  </div>
 
- <div className="p-4 border-t border-gray-200 bg-gray-50">
- <div className="flex items-center justify-between">
- <Link to="/profile" className="flex items-center space-x-3 hover:bg-gray-200 p-2 -ml-2 rounded-md transition-colors flex-1 overflow-x-auto overflow-hidden">
- <div className="w-8 h-8 rounded-full bg-indigo-100 text-indigo-700 flex items-center justify-center font-semibold text-sm shadow-sm flex-shrink-0">
- {user?.name?.charAt(0) || 'U'}
- </div>
- <div className="overflow-x-auto overflow-hidden">
- <p className="text-sm font-semibold text-gray-900 truncate">{user?.name}</p>
- <p className="text-xs text-gray-500 truncate capitalize">{user?.role}</p>
- </div>
- </Link>
- <button 
- onClick={() => setShowLogoutConfirm(true)}
- className="p-2 rounded-md hover:bg-gray-200 text-gray-500 hover:text-red-600 transition-colors ml-1 flex-shrink-0"
- title="Logout"
- >
- <LogOut className="w-5 h-5" />
- </button>
- </div>
- </div>
- </div>
+  <div className="p-4 border-t border-gray-200 bg-gray-50">
+    <div className="flex items-center justify-between">
+      <Link to="/profile" className="flex items-center space-x-3 hover:bg-gray-200/70 p-2 -ml-2 rounded-xl transition-colors flex-1 overflow-x-auto overflow-hidden">
+        <div className={clsx(
+          "w-9 h-9 rounded-xl flex items-center justify-center font-bold text-sm shadow-sm flex-shrink-0",
+          user?.role === 'admin' 
+            ? "bg-indigo-600 text-white" 
+            : "bg-blue-600 text-white"
+        )}>
+          {user?.name?.charAt(0) || 'U'}
+        </div>
+        <div className="overflow-x-auto overflow-hidden">
+          <p className="text-sm font-bold text-gray-900 truncate">{user?.name}</p>
+          <div className="flex items-center gap-1.5 mt-0.5">
+            <span className={clsx(
+              "text-[10px] font-extrabold uppercase px-1.5 py-0.2 rounded tracking-wide",
+              user?.role === 'admin'
+                ? "bg-indigo-100 text-indigo-700 border border-indigo-200"
+                : "bg-blue-100 text-blue-700 border border-blue-200"
+            )}>
+              {user?.role === 'admin' ? '👑 Admin' : '👤 Staff'}
+            </span>
+          </div>
+        </div>
+      </Link>
+      <button 
+        onClick={() => setShowLogoutConfirm(true)}
+        className="p-2 rounded-lg hover:bg-red-50 text-gray-400 hover:text-red-600 transition-colors ml-1 flex-shrink-0"
+        title="Logout / Switch User"
+      >
+        <LogOut className="w-4 h-4" />
+      </button>
+    </div>
+  </div>
+  </div>
 
- {/* Mobile Header */}
- <div className="md:hidden fixed top-0 left-0 right-0 h-14 bg-white border-b border-gray-200 z-40 flex items-center justify-between px-4 shadow-sm">
- <div className="flex items-center">
- <PackageSearch className="w-5 h-5 text-indigo-600 mr-2" />
- <span className="font-semibold text-gray-900">OMS</span>
- </div>
- <div className="flex items-center space-x-3">
- {user?.role === 'staff' && (
- <Link to="/notifications" className="relative p-2 text-gray-500 hover:text-gray-700">
- <Bell className="w-5 h-5" />
- {unreadCount > 0 && <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full border border-white"></span>}
- </Link>
- )}
- <Link to="/profile" className="w-8 h-8 rounded-full bg-indigo-100 flex items-center justify-center font-semibold text-indigo-700 text-xs shadow-sm">
- {user?.name?.charAt(0) || 'U'}
- </Link>
- </div>
- </div>
+  {/* Mobile Header */}
+  <div className="md:hidden fixed top-0 left-0 right-0 h-14 bg-white border-b border-gray-200 z-40 flex items-center justify-between px-4 shadow-sm">
+    <div className="flex items-center gap-2">
+      <PackageSearch className="w-5 h-5 text-indigo-600" />
+      <span className="font-bold text-gray-900 text-sm">OMS</span>
+      <span className={clsx(
+        "text-[10px] font-extrabold uppercase px-1.5 py-0.5 rounded tracking-wide",
+        user?.role === 'admin'
+          ? "bg-indigo-100 text-indigo-700 border border-indigo-200"
+          : "bg-blue-100 text-blue-700 border border-blue-200"
+      )}>
+        {user?.role === 'admin' ? '👑 Admin' : '👤 Staff'}
+      </span>
+    </div>
+    <div className="flex items-center space-x-3">
+      {user?.role === 'staff' && (
+        <Link to="/notifications" className="relative p-2 text-gray-500 hover:text-gray-700">
+          <Bell className="w-5 h-5" />
+          {unreadCount > 0 && <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full border border-white"></span>}
+        </Link>
+      )}
+      <Link to="/profile" className={clsx(
+        "w-8 h-8 rounded-full flex items-center justify-center font-bold text-white text-xs shadow-sm",
+        user?.role === 'admin' ? "bg-indigo-600" : "bg-blue-600"
+      )}>
+        {user?.name?.charAt(0) || 'U'}
+      </Link>
+    </div>
+  </div>
 
  {/* Main Content */}
  <div className="flex-1 flex flex-col h-full overflow-x-auto overflow-hidden relative mt-14 md:mt-0">
