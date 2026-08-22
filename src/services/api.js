@@ -96,6 +96,16 @@ class ApiClient {
     return this.request('/products/pending');
   }
 
+  getFavorites() {
+    return this.request('/products/favorites');
+  }
+
+  toggleFavorite(productId) {
+    return this.request(`/products/${productId}/favorite`, {
+      method: 'POST'
+    });
+  }
+
   createProduct(product) {
     return this.request('/products', {
       method: 'POST',
@@ -125,6 +135,10 @@ class ApiClient {
   }
 
   // Orders Endpoints
+  getOrders() {
+    return this.request('/orders');
+  }
+
   getOrderMatrix(params = {}) {
     const query = new URLSearchParams(params).toString();
     return this.request(`/orders/matrix${query ? `?${query}` : ''}`);
@@ -151,10 +165,23 @@ class ApiClient {
     });
   }
 
-  updateOrderStatus(orderId, status) {
-    return this.request(`/orders/${orderId}/status`, {
+  updateOrderStatus(id, status) {
+    return this.request(`/orders/${id}/status`, {
       method: 'PATCH',
       body: JSON.stringify({ status }),
+    });
+  }
+
+  markOrderSent(orderId) {
+    return this.request(`/orders/${orderId}/mark-sent`, {
+      method: 'POST'
+    });
+  }
+
+  combineOrders(orderId, targetOrderId) {
+    return this.request(`/orders/${orderId}/combine`, {
+      method: 'POST',
+      body: JSON.stringify({ targetOrderId })
     });
   }
 

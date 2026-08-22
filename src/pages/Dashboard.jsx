@@ -7,8 +7,9 @@ import {
   getSortedRowModel,
   flexRender
 } from '@tanstack/react-table';
-import { Filter, Download, Search, RefreshCw, Loader2 } from 'lucide-react';
+import { Filter, Download, Search, RefreshCw, Loader2, Star } from 'lucide-react';
 import { AlertModal } from '../components/ui/AlertModal';
+import clsx from 'clsx';
 
 const EditableOrderCell = ({ getValue, row, column, table }) => {
   const initialValue = getValue() || 0;
@@ -59,22 +60,29 @@ export const Dashboard = () => {
   const user = useStore(state => state.user);
   const orderMatrix = useStore(state => state.orderMatrix);
   const staff = useStore(state => state.staff);
+  const favorites = useStore(state => state.favorites);
+  const toggleFavorite = useStore(state => state.toggleFavorite);
+  const fetchFavorites = useStore(state => state.fetchFavorites);
   const fetchOrderMatrix = useStore(state => state.fetchOrderMatrix);
   const submitDraftOrders = useStore(state => state.submitDraftOrders);
 
   const [loading, setLoading] = useState(false);
   const [globalFilter, setGlobalFilter] = useState('');
   const [selectedCompany, setSelectedCompany] = useState('All');
+  const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
   const [companies, setCompanies] = useState(['All', 'PREMIER', 'MIDEA', 'SAMSUNG', 'SONY']);
   const [alertConfig, setAlertConfig] = useState({ isOpen: false, title: '', message: '', type: 'success' });
 
   const loadData = async () => {
     setLoading(true);
     try {
-      const data = await fetchOrderMatrix({
-        company: selectedCompany !== 'All' ? selectedCompany : undefined,
-        search: globalFilter || undefined
-      });
+      const [data] = await Promise.all([
+        fetchOrderMatrix({
+          company: selectedCompany !== 'All' ? selectedCompany : undefined,
+          search: globalFilter || undefined
+        }),
+        fetchFavorites()
+      ]);
       if (data?.matrix) {
         const uniqueCompanies = ['All', ...new Set(data.matrix.map(p => p.company))];
         setCompanies(uniqueCompanies);
@@ -91,6 +99,9 @@ export const Dashboard = () => {
   // Compute Matrix Data
   const data = useMemo(() => {
     let list = orderMatrix || [];
+    if (showFavoritesOnly) {
+      list = list.filter(r => favorites.includes(r.id || r._id));
+    }
     if (globalFilter) {
       const q = globalFilter.toLowerCase();
       list = list.filter(r => 
@@ -99,7 +110,7 @@ export const Dashboard = () => {
       );
     }
     return list;
-  }, [orderMatrix, globalFilter]);
+  }, [orderMatrix, globalFilter, showFavoritesOnly, favorites]);
 
   // Define Columns dynamically based on Staff
   const columns = useMemo(() => {
@@ -107,7 +118,26 @@ export const Dashboard = () => {
       {
         accessorKey: 'model',
         header: 'Model',
-        cell: info => <span className="font-semibold text-gray-900">{info.getValue()}</span>,
+        cell: info => {
+          const rowId = info.row.original.id;
+          const isFav = favorites.includes(rowId);
+          return (
+            <div className="flex items-center gap-1.5">
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  toggleFavorite(rowId);
+                }}
+                className="p-1 hover:bg-gray-100 rounded text-gray-300 hover:text-amber-500 transition-colors"
+                title={isFav ? "Remove from favorites" : "Add to favorites"}
+              >
+                <Star className={clsx("w-3.5 h-3.5", isFav ? "fill-amber-400 text-amber-500" : "text-gray-300")} />
+              </button>
+              <span className="font-semibold text-gray-900">{info.getValue()}</span>
+            </div>
+          );
+        },
       },
       {
         accessorKey: 'description',
@@ -233,6 +263,21 @@ export const Dashboard = () => {
             >
               {companies.map(c => <option key={c} value={c}>{c}</option>)}
             </select>
+
+            <button 
+              type="button"
+              onClick={() => setShowFavoritesOnly(!showFavoritesOnly)}
+              className={clsx(
+                "flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-all shadow-sm",
+                showFavoritesOnly
+                  ? "bg-amber-400 text-amber-950 shadow-amber-400/30"
+                  : "bg-white/10 hover:bg-white/20 text-white"
+              )}
+              title="Show only favorited products"
+            >
+              <Star className={clsx("w-3.5 h-3.5", showFavoritesOnly ? "fill-amber-950 text-amber-950" : "fill-amber-400 text-amber-400")} />
+              <span>Favorites</span>
+            </button>
 
             <button 
               onClick={loadData}

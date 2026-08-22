@@ -1,12 +1,17 @@
 import React, { useState, useEffect } from 'react';
-import { Building2, Download, RefreshCw, Loader2, Package } from 'lucide-react';
+import { Building2, Download, RefreshCw, Loader2, Package, Send, Merge, CheckCircle, Layers, AlertCircle } from 'lucide-react';
+import { AlertModal } from '../components/ui/AlertModal';
 import api from '../services/api';
+import clsx from 'clsx';
 
 export const CompanyView = () => {
   const [companies, setCompanies] = useState(['PREMIER', 'MIDEA', 'SAMSUNG', 'SONY']);
   const [selectedCompany, setSelectedCompany] = useState('PREMIER');
   const [companyData, setCompanyData] = useState(null);
+  const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [actionLoading, setActionLoading] = useState(false);
+  const [alertConfig, setAlertConfig] = useState({ isOpen: false, title: '', message: '', type: 'success' });
 
   const loadCompanies = async () => {
     try {
@@ -24,8 +29,12 @@ export const CompanyView = () => {
     if (!selectedCompany) return;
     setLoading(true);
     try {
-      const data = await api.getCompanyView(selectedCompany);
+      const [data, allOrders] = await Promise.all([
+        api.getCompanyView(selectedCompany),
+        api.request('/orders')
+      ]);
       setCompanyData(data);
+      setOrders(allOrders || []);
     } catch (err) {
       console.warn('Failed to load company view:', err.message);
     } finally {
@@ -42,6 +51,58 @@ export const CompanyView = () => {
   }, [selectedCompany]);
 
   const products = (companyData?.products || []).filter(p => p.totalQty > 0);
+
+  // Filter orders relevant to this company
+  const companyOrders = orders.filter(o => 
+    (o.items || []).some(i => i.company?.toLowerCase() === selectedCompany.toLowerCase()) ||
+    o.company?.toLowerCase() === selectedCompany.toLowerCase()
+  );
+
+  const handleMarkSent = async (orderId) => {
+    setActionLoading(true);
+    try {
+      await api.markOrderSent(orderId);
+      setAlertConfig({
+        isOpen: true,
+        title: "Purchase Order Sent",
+        message: "Order batch marked as Sent to Supplier successfully.",
+        type: "success"
+      });
+      loadCompanyDetails();
+    } catch (err) {
+      setAlertConfig({
+        isOpen: true,
+        title: "Error",
+        message: err.message || "Failed to update order status.",
+        type: "danger"
+      });
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleCombineBatches = async (addendumOrderId, mainOrderId) => {
+    setActionLoading(true);
+    try {
+      await api.combineOrders(addendumOrderId, mainOrderId);
+      setAlertConfig({
+        isOpen: true,
+        title: "Orders Combined",
+        message: "Addendum batch successfully merged with the primary order!",
+        type: "success"
+      });
+      loadCompanyDetails();
+    } catch (err) {
+      setAlertConfig({
+        isOpen: true,
+        title: "Combine Failed",
+        message: err.message || "Failed to combine order batches.",
+        type: "danger"
+      });
+    } finally {
+      setActionLoading(false);
+    }
+  };
 
   const handleExportCSV = () => {
     if (!products.length) return;
@@ -64,17 +125,20 @@ export const CompanyView = () => {
     document.body.removeChild(link);
   };
 
+  const mainOrder = companyOrders.find(o => !o.batchNumber?.includes('Addendum')) || companyOrders[0];
+  const addendumOrders = companyOrders.filter(o => o.batchNumber?.includes('Addendum') || o.id !== mainOrder?.id);
+
   return (
     <div className="space-y-6 max-w-5xl mx-auto mb-10">
       {/* Header */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 bg-gradient-to-r from-indigo-600 to-indigo-800 p-6 rounded-2xl shadow-md text-white">
         <div>
           <div className="flex items-center gap-2">
-            <h1 className="text-xl font-bold text-white">Company View</h1>
+            <h1 className="text-xl font-bold text-white">Company View & PO Batches</h1>
             {loading && <Loader2 className="w-4 h-4 animate-spin text-indigo-200" />}
           </div>
           <p className="text-indigo-100 text-sm mt-1 opacity-90">
-            Supplier-wise breakdown of all products ordered with who ordered each item.
+            Supplier-wise breakdown of all products ordered, purchase order batches, and revision merge controls.
           </p>
         </div>
 
@@ -98,21 +162,105 @@ export const CompanyView = () => {
             onClick={handleExportCSV}
             className="bg-white text-indigo-700 px-4 py-2 rounded-lg text-sm font-semibold hover:bg-indigo-50 shadow-md flex items-center transition-transform hover:scale-105"
           >
-            <Download className="w-4 h-4 mr-1.5" /> Export
+            <Download className="w-4 h-4 mr-1.5" /> Export PO
           </button>
         </div>
       </div>
+
+      {/* Incremental PO Batches Management Banner */}
+      {companyOrders.length > 0 && (
+        <div className="bg-white rounded-2xl shadow-sm border border-indigo-100 p-5 space-y-3">
+          <div className="flex items-center justify-between">
+            <h3 className="font-bold text-gray-900 text-sm flex items-center gap-2">
+              <Layers className="w-4 h-4 text-indigo-600" />
+              <span>Purchase Order Batches for {selectedCompany}</span>
+            </h3>
+            <span className="text-xs text-gray-500 font-medium">
+              {companyOrders.length} active batch{companyOrders.length > 1 ? 'es' : ''}
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
+            {companyOrders.map((ord) => {
+              const isAddendum = ord.batchNumber?.includes('Addendum');
+              const isSent = ord.isSentToSupplier;
+
+              return (
+                <div 
+                  key={ord.id || ord._id} 
+                  className={clsx(
+                    "p-3.5 rounded-xl border flex flex-col justify-between gap-3 text-xs transition-all",
+                    isAddendum ? "bg-purple-50/50 border-purple-200" : "bg-gray-50/80 border-gray-200"
+                  )}
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-mono font-bold text-gray-900">{ord.orderNumber}</span>
+                        <span className={clsx(
+                          "px-2 py-0.5 rounded text-[10px] font-bold uppercase",
+                          isAddendum ? "bg-purple-200 text-purple-900" : "bg-indigo-100 text-indigo-800"
+                        )}>
+                          {ord.batchNumber || 'Batch 1'}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-gray-500 mt-1">
+                        Staff: {ord.staffName} • Total: {ord.totalQuantity || 0} pcs ({ord.totalCuft || 0} cuft)
+                      </p>
+                    </div>
+
+                    <div>
+                      {isSent ? (
+                        <span className="bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded-full text-[10px] font-bold flex items-center gap-1">
+                          <CheckCircle className="w-3 h-3" /> Sent to Supplier
+                        </span>
+                      ) : (
+                        <span className="bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full text-[10px] font-bold">
+                          Pending PO Send
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-end gap-2 pt-2 border-t border-gray-200/60">
+                    {!isSent && (
+                      <button
+                        onClick={() => handleMarkSent(ord.id || ord._id)}
+                        disabled={actionLoading}
+                        className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold flex items-center gap-1 shadow-sm"
+                      >
+                        <Send className="w-3 h-3" /> Mark as Sent to Supplier
+                      </button>
+                    )}
+
+                    {isAddendum && mainOrder && (
+                      <button
+                        onClick={() => handleCombineBatches(ord.id || ord._id, mainOrder.id || mainOrder._id)}
+                        disabled={actionLoading}
+                        className="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 text-white rounded-lg text-xs font-semibold flex items-center gap-1 shadow-sm"
+                        title="Merge this addendum into the main purchase order"
+                      >
+                        <Merge className="w-3 h-3" /> Combine with Main Order
+                      </button>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {/* Supplier Card */}
       <div className="bg-white rounded-2xl shadow-sm border border-gray-200 p-6 sm:p-8 relative overflow-hidden">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-8 pb-6 border-b border-gray-100 gap-4">
           <div className="flex items-center space-x-4">
-            <div className="w-14 h-14 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center border border-indigo-100">
+            <div className="w-14 h-14 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center border border-indigo-100 shadow-sm">
               <Building2 className="w-7 h-7" />
             </div>
             <div>
               <h2 className="text-xl font-bold text-gray-900">{selectedCompany}</h2>
-              <p className="text-gray-500 text-xs font-medium">Supplier Catalog Breakdown</p>
+              <p className="text-gray-500 text-xs font-medium">Supplier Catalog Order Summary</p>
             </div>
           </div>
 
@@ -167,6 +315,14 @@ export const CompanyView = () => {
           )}
         </div>
       </div>
+
+      <AlertModal 
+        isOpen={alertConfig.isOpen}
+        onClose={() => setAlertConfig(prev => ({ ...prev, isOpen: false }))}
+        title={alertConfig.title}
+        message={alertConfig.message}
+        type={alertConfig.type}
+      />
     </div>
   );
 };

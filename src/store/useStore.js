@@ -12,6 +12,7 @@ export const useStore = create(
       companies: [],
       staff: [],
       orders: [],
+      favorites: [],
       orderMatrix: [],
       containers: [],
       distributions: [],
@@ -44,8 +45,42 @@ export const useStore = create(
           token: null,
           orderMatrix: [],
           pendingItems: [],
-          receivedItems: []
+          receivedItems: [],
+          favorites: []
         });
+      },
+
+      // --- Favorites ---
+      fetchFavorites: async () => {
+        try {
+          const data = await api.getFavorites();
+          set({ favorites: data || [] });
+          return data;
+        } catch (err) {
+          console.warn('Fetch favorites failed:', err.message);
+        }
+      },
+
+      toggleFavorite: async (productId) => {
+        try {
+          const res = await api.toggleFavorite(productId);
+          if (res.favorites) {
+            set({ favorites: res.favorites });
+          } else {
+            // Local optimistic toggle
+            set(state => {
+              const current = state.favorites || [];
+              const exists = current.includes(productId);
+              return {
+                favorites: exists ? current.filter(id => id !== productId) : [...current, productId]
+              };
+            });
+          }
+          return res;
+        } catch (err) {
+          console.error('Toggle favorite failed:', err.message);
+          throw err;
+        }
       },
 
       updateUserProfile: async (name, email, phone) => {
@@ -204,6 +239,42 @@ export const useStore = create(
           return res;
         } catch (err) {
           console.error('Update order status failed:', err.message);
+          throw err;
+        }
+      },
+
+      fetchOrders: async () => {
+        try {
+          const data = await api.getOrders();
+          set({ orders: data || [] });
+          return data;
+        } catch (err) {
+          console.warn('Fetch orders failed:', err.message);
+        }
+      },
+
+      markOrderSent: async (orderId) => {
+        try {
+          const res = await api.markOrderSent(orderId);
+          set((state) => ({
+            orders: state.orders.map((o) => (o.id === orderId || o._id === orderId ? { ...o, isSentToSupplier: true, status: 'ordered' } : o))
+          }));
+          return res;
+        } catch (err) {
+          console.error('Mark order sent failed:', err.message);
+          throw err;
+        }
+      },
+
+      combineOrders: async (orderId, targetOrderId) => {
+        try {
+          const res = await api.combineOrders(orderId, targetOrderId);
+          set((state) => ({
+            orders: state.orders.filter((o) => o.id !== orderId && o._id !== orderId)
+          }));
+          return res;
+        } catch (err) {
+          console.error('Combine orders failed:', err.message);
           throw err;
         }
       },
