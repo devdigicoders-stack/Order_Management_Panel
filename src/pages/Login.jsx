@@ -14,27 +14,14 @@ import {
   Mail, 
   Eye, 
   EyeOff, 
-  Sparkles,
   ArrowRight
 } from 'lucide-react';
 import clsx from 'clsx';
 
 const loginSchema = z.object({
-  email: z.string().email('Please enter a valid email address'),
-  password: z.string().min(6, 'Password must be at least 6 characters'),
+  email: z.string().min(1, 'Email is required').email('Please enter a valid email address'),
+  password: z.string().min(1, 'Password is required'),
 });
-
-const DEMO_USERS = {
-  admin: [
-    { name: 'Admin User', email: 'admin@oms.com', role: 'admin', desc: 'Master Administrator' }
-  ],
-  staff: [
-    { name: 'Ahmed', email: 'ahmed@oms.com', role: 'staff', desc: 'Staff Member' },
-    { name: 'John', email: 'john@oms.com', role: 'staff', desc: 'Staff Member' },
-    { name: 'Ali', email: 'ali@oms.com', role: 'staff', desc: 'Staff Member' },
-    { name: 'Sarah', email: 'sarah@oms.com', role: 'staff', desc: 'Staff Member' }
-  ]
-};
 
 export const Login = () => {
   const [selectedRole, setSelectedRole] = useState('admin'); // 'admin' | 'staff'
@@ -42,11 +29,11 @@ export const Login = () => {
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
-  const { register, handleSubmit, setValue, formState: { errors } } = useForm({
+  const { register, handleSubmit, reset, formState: { errors } } = useForm({
     resolver: zodResolver(loginSchema),
     defaultValues: {
-      email: 'admin@oms.com',
-      password: '123456'
+      email: '',
+      password: ''
     }
   });
 
@@ -56,20 +43,10 @@ export const Login = () => {
   const handleRoleChange = (role) => {
     setSelectedRole(role);
     setAuthError(null);
-    if (role === 'admin') {
-      setValue('email', 'admin@oms.com');
-      setValue('password', '123456');
-    } else {
-      setValue('email', 'ahmed@oms.com');
-      setValue('password', '123456');
-    }
-  };
-
-  const handleQuickFill = (user) => {
-    setSelectedRole(user.role);
-    setValue('email', user.email);
-    setValue('password', '123456');
-    setAuthError(null);
+    reset({
+      email: '',
+      password: ''
+    });
   };
 
   const onSubmit = async (data) => {
@@ -149,7 +126,7 @@ export const Login = () => {
               </button>
             </div>
 
-            {/* Selected Role Badge & Info Notice */}
+            {/* Selected Role Badge & Description */}
             <div className={clsx(
               "mt-3 p-2.5 rounded-xl border text-xs flex items-center gap-2 transition-all",
               selectedRole === 'admin' 
@@ -202,7 +179,7 @@ export const Login = () => {
                       ? "border-red-300 bg-red-50/50 focus:ring-2 focus:ring-red-500 focus:border-transparent" 
                       : "border-gray-200 bg-gray-50/70 focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
                   )}
-                  placeholder={selectedRole === 'admin' ? "admin@oms.com" : "ahmed@oms.com"}
+                  placeholder={selectedRole === 'admin' ? "Enter admin email" : "Enter staff email"}
                 />
               </div>
               {errors.email && (
@@ -229,7 +206,7 @@ export const Login = () => {
                       ? "border-red-300 bg-red-50/50 focus:ring-2 focus:ring-red-500 focus:border-transparent" 
                       : "border-gray-200 bg-gray-50/70 focus:bg-white focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
                   )}
-                  placeholder="••••••••"
+                  placeholder="Enter password"
                 />
                 <button
                   type="button"
@@ -267,53 +244,6 @@ export const Login = () => {
               </button>
             </div>
           </form>
-
-          {/* Quick Demo Credentials Picker */}
-          <div className="mt-6 pt-5 border-t border-gray-100">
-            <div className="flex items-center justify-between mb-2.5">
-              <span className="text-[11px] font-bold uppercase tracking-wider text-gray-400 flex items-center gap-1">
-                <Sparkles className="w-3 h-3 text-amber-500" />
-                Quick Test Accounts (Password: 123456)
-              </span>
-            </div>
-
-            {selectedRole === 'admin' ? (
-              <div className="space-y-1.5">
-                {DEMO_USERS.admin.map((u) => (
-                  <button
-                    key={u.email}
-                    type="button"
-                    onClick={() => handleQuickFill(u)}
-                    className="w-full flex items-center justify-between px-3 py-2 text-xs bg-gray-50 hover:bg-indigo-50 border border-gray-200 hover:border-indigo-300 rounded-lg text-gray-700 transition-colors text-left group"
-                  >
-                    <div className="flex items-center gap-2">
-                      <span className="w-2 h-2 rounded-full bg-indigo-600"></span>
-                      <span className="font-semibold text-gray-900">{u.name}</span>
-                      <span className="text-gray-400 font-mono text-[11px]">({u.email})</span>
-                    </div>
-                    <span className="text-[10px] font-bold text-indigo-600 group-hover:underline">Click to Fill</span>
-                  </button>
-                ))}
-              </div>
-            ) : (
-              <div className="grid grid-cols-2 gap-1.5">
-                {DEMO_USERS.staff.map((u) => (
-                  <button
-                    key={u.email}
-                    type="button"
-                    onClick={() => handleQuickFill(u)}
-                    className="flex flex-col px-2.5 py-1.5 text-xs bg-gray-50 hover:bg-blue-50 border border-gray-200 hover:border-blue-300 rounded-lg text-gray-700 transition-colors text-left group"
-                  >
-                    <span className="font-semibold text-gray-900 flex items-center justify-between">
-                      {u.name}
-                      <span className="text-[9px] font-bold text-blue-600 opacity-0 group-hover:opacity-100 transition-opacity">Fill</span>
-                    </span>
-                    <span className="text-gray-400 font-mono text-[10px] truncate">{u.email}</span>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
 
         </div>
 

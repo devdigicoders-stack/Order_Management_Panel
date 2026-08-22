@@ -23,7 +23,7 @@ export const useStore = create(
       error: null,
 
       // --- Authentication ---
-      login: async (email, password = '123456', role = 'admin') => {
+      login: async (email, password, role) => {
         set({ loading: true, error: null });
         try {
           const res = await api.login(email, password, role);
