@@ -169,37 +169,53 @@ export const AnalyticsDashboard = () => {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 flex flex-col">
           <h2 className="text-base font-bold text-gray-900 mb-6">Order Volume by Supplier</h2>
-          <div className="flex-1 min-h-[260px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={barData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f3f4f6" />
-                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#6b7280', fontSize: 12}} dy={10} />
-                <YAxis axisLine={false} tickLine={false} tick={{fill: '#6b7280', fontSize: 12}} />
-                <Tooltip />
-                <Bar dataKey="Orders" fill="#4f46e5" radius={[4, 4, 0, 0]} barSize={40} />
-              </BarChart>
-            </ResponsiveContainer>
+          <div className="flex-1 min-h-[260px] flex items-center justify-center">
+            {barData.length > 0 && barData.some(b => b.Orders > 0) ? (
+              <ResponsiveContainer width="100%" height={260}>
+                <BarChart data={barData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f3f4f6" />
+                  <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#6b7280', fontSize: 12}} dy={10} />
+                  <YAxis axisLine={false} tickLine={false} tick={{fill: '#6b7280', fontSize: 12}} />
+                  <Tooltip />
+                  <Bar dataKey="Orders" fill="#4f46e5" radius={[4, 4, 0, 0]} barSize={40} />
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="flex flex-col items-center justify-center text-gray-400 py-10">
+                <Building2 className="w-10 h-10 text-gray-300 mb-2" />
+                <p className="text-sm font-medium text-gray-500">No order volume data available yet</p>
+                <p className="text-xs text-gray-400 mt-1">Orders will appear here once created</p>
+              </div>
+            )}
           </div>
         </div>
 
         <div className="bg-white p-6 rounded-xl shadow-sm border border-gray-200 flex flex-col">
           <h2 className="text-base font-bold text-gray-900 mb-6">Items Ordered per Salesperson</h2>
-          <div className="flex-1 min-h-[260px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <AreaChart data={staffOrdersData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                <defs>
-                  <linearGradient id="colorItems" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="5%" stopColor="#10b981" stopOpacity={0.3}/>
-                    <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
-                  </linearGradient>
-                </defs>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f3f4f6" />
-                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#6b7280', fontSize: 12}} dy={10} />
-                <YAxis axisLine={false} tickLine={false} tick={{fill: '#6b7280', fontSize: 12}} />
-                <Tooltip />
-                <Area type="monotone" dataKey="Items" stroke="#10b981" strokeWidth={3} fillOpacity={1} fill="url(#colorItems)" />
-              </AreaChart>
-            </ResponsiveContainer>
+          <div className="flex-1 min-h-[260px] flex items-center justify-center">
+            {staffOrdersData.length > 0 && staffOrdersData.some(s => s.Items > 0) ? (
+              <ResponsiveContainer width="100%" height={260}>
+                <AreaChart data={staffOrdersData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="colorItems" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="#10b981" stopOpacity={0.3}/>
+                      <stop offset="95%" stopColor="#10b981" stopOpacity={0}/>
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f3f4f6" />
+                  <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{fill: '#6b7280', fontSize: 12}} dy={10} />
+                  <YAxis axisLine={false} tickLine={false} tick={{fill: '#6b7280', fontSize: 12}} />
+                  <Tooltip />
+                  <Area type="monotone" dataKey="Items" stroke="#10b981" strokeWidth={3} fillOpacity={1} fill="url(#colorItems)" />
+                </AreaChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="flex flex-col items-center justify-center text-gray-400 py-10">
+                <Users className="w-10 h-10 text-gray-300 mb-2" />
+                <p className="text-sm font-medium text-gray-500">No salesperson activity recorded</p>
+                <p className="text-xs text-gray-400 mt-1">Staff order metrics will display here</p>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -210,48 +226,66 @@ export const AnalyticsDashboard = () => {
           <h2 className="text-base font-bold text-gray-900 mb-1">Container Capacity Utilization</h2>
           <p className="text-xs text-gray-500 mb-4">Total Cuft utilization across all active containers.</p>
           <div className="flex-1 min-h-[220px] flex items-center justify-center relative">
-            <ResponsiveContainer width="100%" height={220}>
-              <PieChart>
-                <Pie
-                  data={containerData}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={60}
-                  outerRadius={85}
-                  paddingAngle={2}
-                  dataKey="value"
-                >
-                  {containerData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
-                  ))}
-                </Pie>
-                <Tooltip />
-              </PieChart>
-            </ResponsiveContainer>
-            <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-              <span className="text-lg font-bold text-gray-900">{totalCapacityCuft}</span>
-              <span className="text-[10px] text-gray-400 uppercase font-bold">Total Cuft</span>
-            </div>
+            {containersList.length > 0 && totalCapacityCuft > 0 ? (
+              <>
+                <ResponsiveContainer width="100%" height={220}>
+                  <PieChart>
+                    <Pie
+                      data={containerData}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={60}
+                      outerRadius={85}
+                      paddingAngle={2}
+                      dataKey="value"
+                    >
+                      {containerData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={PIE_COLORS[index % PIE_COLORS.length]} />
+                      ))}
+                    </Pie>
+                    <Tooltip />
+                  </PieChart>
+                </ResponsiveContainer>
+                <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+                  <span className="text-lg font-bold text-gray-900">{totalCapacityCuft}</span>
+                  <span className="text-[10px] text-gray-400 uppercase font-bold">Total Cuft</span>
+                </div>
+              </>
+            ) : (
+              <div className="flex flex-col items-center justify-center text-gray-400 py-8">
+                <ContainerIcon className="w-10 h-10 text-gray-300 mb-2" />
+                <p className="text-sm font-medium text-gray-500">No active containers</p>
+                <p className="text-xs text-gray-400 mt-1">Container stats will appear once added</p>
+              </div>
+            )}
           </div>
         </div>
 
         {/* Top 5 Products */}
         <div className="lg:col-span-2 bg-white p-6 rounded-xl shadow-sm border border-gray-200 flex flex-col">
           <h2 className="text-base font-bold text-gray-900 mb-4">Top 5 Most Ordered Products</h2>
-          <div className="flex-1 min-h-[220px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <ComposedChart
-                layout="vertical"
-                data={topProducts}
-                margin={{ top: 0, right: 20, left: 30, bottom: 0 }}
-              >
-                <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} stroke="#f3f4f6" />
-                <XAxis type="number" axisLine={false} tickLine={false} tick={{fill: '#6b7280', fontSize: 12}} />
-                <YAxis dataKey="name" type="category" axisLine={false} tickLine={false} tick={{fill: '#374151', fontSize: 12, fontWeight: 600}} width={120} />
-                <Tooltip />
-                <Bar dataKey="qty" name="Quantity Ordered" fill="#8b5cf6" radius={[0, 4, 4, 0]} barSize={24} />
-              </ComposedChart>
-            </ResponsiveContainer>
+          <div className="flex-1 min-h-[220px] flex items-center justify-center">
+            {topProducts.length > 0 && topProducts.some(p => p.qty > 0) ? (
+              <ResponsiveContainer width="100%" height={220}>
+                <ComposedChart
+                  layout="vertical"
+                  data={topProducts}
+                  margin={{ top: 0, right: 20, left: 30, bottom: 0 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" horizontal={true} vertical={false} stroke="#f3f4f6" />
+                  <XAxis type="number" axisLine={false} tickLine={false} tick={{fill: '#6b7280', fontSize: 12}} />
+                  <YAxis dataKey="name" type="category" axisLine={false} tickLine={false} tick={{fill: '#374151', fontSize: 12, fontWeight: 600}} width={120} />
+                  <Tooltip />
+                  <Bar dataKey="qty" name="Quantity Ordered" fill="#8b5cf6" radius={[0, 4, 4, 0]} barSize={24} />
+                </ComposedChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="flex flex-col items-center justify-center text-gray-400 py-8">
+                <Package className="w-10 h-10 text-gray-300 mb-2" />
+                <p className="text-sm font-medium text-gray-500">No product order history yet</p>
+                <p className="text-xs text-gray-400 mt-1">Top ordered products will show here</p>
+              </div>
+            )}
           </div>
         </div>
       </div>
