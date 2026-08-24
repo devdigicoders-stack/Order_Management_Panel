@@ -144,6 +144,31 @@ export const useStore = create(
         }
       },
 
+      updateProduct: async (id, productData) => {
+        try {
+          const res = await api.updateProduct(id, productData);
+          set((state) => ({
+            products: state.products.map((p) => (p.id === id || p._id === id ? res : p))
+          }));
+          return res;
+        } catch (err) {
+          console.error('Update product failed:', err.message);
+          throw err;
+        }
+      },
+
+      deleteProduct: async (id) => {
+        try {
+          await api.deleteProduct(id);
+          set((state) => ({
+            products: state.products.filter((p) => p.id !== id && p._id !== id)
+          }));
+        } catch (err) {
+          console.error('Delete product failed:', err.message);
+          throw err;
+        }
+      },
+
       requestNewProduct: async (productData) => {
         try {
           const res = await api.requestNewProduct(productData);

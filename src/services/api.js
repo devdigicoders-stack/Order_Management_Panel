@@ -127,6 +127,19 @@ class ApiClient {
     });
   }
 
+  updateProduct(id, product) {
+    return this.request(`/products/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(product),
+    });
+  }
+
+  deleteProduct(id) {
+    return this.request(`/products/${id}`, {
+      method: 'DELETE',
+    });
+  }
+
   rejectProduct(id, reason) {
     return this.request(`/products/${id}/reject`, {
       method: 'POST',

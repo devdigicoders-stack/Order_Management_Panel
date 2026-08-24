@@ -187,23 +187,28 @@ export const Dashboard = () => {
     }
   });
 
+  const [submitting, setSubmitting] = useState(false);
+
   const handleSubmitOrders = async () => {
+    setSubmitting(true);
     try {
-      await submitDraftOrders();
+      const res = await submitDraftOrders();
       setAlertConfig({
         isOpen: true,
-        title: "Success",
-        message: "Orders submitted successfully and forwarded for approval!",
+        title: "Orders Submitted",
+        message: res?.message || "Your order quantities have been successfully saved and submitted for admin review!",
         type: "success"
       });
       loadData();
     } catch (err) {
       setAlertConfig({
         isOpen: true,
-        title: "Order Status",
-        message: "Orders are up to date.",
+        title: "Submission Status",
+        message: err.message || "Please enter quantities in your column before submitting.",
         type: "info"
       });
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -291,9 +296,17 @@ export const Dashboard = () => {
           {user?.role === 'staff' ? (
             <button 
               onClick={handleSubmitOrders}
-              className="w-full md:w-auto justify-center bg-white text-indigo-700 px-5 py-2 rounded-lg text-sm font-semibold hover:bg-indigo-50 shadow-md flex items-center transition-transform hover:scale-105"
+              disabled={submitting || loading}
+              className="w-full md:w-auto justify-center bg-white text-indigo-700 px-5 py-2 rounded-lg text-sm font-semibold hover:bg-indigo-50 shadow-md flex items-center transition-transform hover:scale-105 disabled:opacity-60 disabled:cursor-not-allowed"
             >
-              Submit Orders
+              {submitting ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin text-indigo-600" />
+                  Submitting...
+                </>
+              ) : (
+                'Submit Orders'
+              )}
             </button>
           ) : (
             <button 
@@ -354,7 +367,26 @@ export const Dashboard = () => {
               {table.getRowModel().rows.length === 0 && (
                 <tr>
                   <td colSpan={columns.length} className="px-4 py-12 text-center text-gray-500">
-                    {loading ? 'Loading matrix from database...' : 'No products found.'}
+                    {showFavoritesOnly ? (
+                      <div className="flex flex-col items-center justify-center py-4">
+                        <Star className="w-8 h-8 text-amber-400 fill-amber-400 mb-2" />
+                        <p className="text-sm font-bold text-gray-800">No Favorite Products Starred</p>
+                        <p className="text-xs text-gray-500 mt-1 max-w-sm">
+                          You have filtered by favorites, but haven't starred any products yet. Click the star icon (☆) next to any model to add it to your favorites.
+                        </p>
+                        <button 
+                          type="button"
+                          onClick={() => setShowFavoritesOnly(false)} 
+                          className="mt-3 px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold shadow-sm transition-all"
+                        >
+                          Show All Products
+                        </button>
+                      </div>
+                    ) : loading ? (
+                      'Loading matrix from database...'
+                    ) : (
+                      'No products found.'
+                    )}
                   </td>
                 </tr>
               )}

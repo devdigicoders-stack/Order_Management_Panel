@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useStore } from '../store/useStore';
-import { Plus, Search, X, Trash2, RefreshCw, Loader2, PackageSearch } from 'lucide-react';
+import { Plus, Search, X, Trash2, Pencil, RefreshCw, Loader2, PackageSearch } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -22,10 +22,15 @@ export const ProductDatabase = () => {
   const [loading, setLoading] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [showAddModal, setShowAddModal] = useState(false);
+  const [productToEdit, setProductToEdit] = useState(null);
   const [productToDelete, setProductToDelete] = useState(null);
   const [alertConfig, setAlertConfig] = useState({ isOpen: false, title: '', message: '', type: 'success' });
 
-  const { register, handleSubmit, reset, formState: { errors } } = useForm({
+  const { register: registerAdd, handleSubmit: handleSubmitAdd, reset: resetAdd, formState: { errors: errorsAdd } } = useForm({
+    resolver: zodResolver(productSchema)
+  });
+
+  const { register: registerEdit, handleSubmit: handleSubmitEdit, reset: resetEdit, formState: { errors: errorsEdit } } = useForm({
     resolver: zodResolver(productSchema)
   });
 
@@ -45,7 +50,18 @@ export const ProductDatabase = () => {
     loadProducts();
   }, [searchTerm]);
 
-  const onSubmit = async (data) => {
+  const handleOpenEdit = (product) => {
+    setProductToEdit(product);
+    resetEdit({
+      company: product.company || '',
+      model: product.model || '',
+      description: product.description || '',
+      cuft: product.cuft !== undefined ? Number(product.cuft) : 0,
+      category: product.category || 'General',
+    });
+  };
+
+  const onAddSubmit = async (data) => {
     try {
       if (user?.role === 'admin') {
         await api.createProduct({
@@ -71,7 +87,7 @@ export const ProductDatabase = () => {
         });
       }
       setShowAddModal(false);
-      reset();
+      resetAdd();
       loadProducts();
     } catch (err) {
       setAlertConfig({
@@ -83,11 +99,38 @@ export const ProductDatabase = () => {
     }
   };
 
+  const onEditSubmit = async (data) => {
+    if (!productToEdit) return;
+    try {
+      const targetId = productToEdit.id || productToEdit._id;
+      await api.updateProduct(targetId, {
+        ...data,
+        cuft: Number(data.cuft || 0)
+      });
+      setAlertConfig({
+        isOpen: true,
+        title: "Product Updated",
+        message: `${data.model} has been updated successfully!`,
+        type: "success"
+      });
+      setProductToEdit(null);
+      resetEdit();
+      loadProducts();
+    } catch (err) {
+      setAlertConfig({
+        isOpen: true,
+        title: "Error",
+        message: err.message || "Failed to update product.",
+        type: "danger"
+      });
+    }
+  };
+
   const handleDelete = async () => {
     if (!productToDelete) return;
     try {
       const targetId = productToDelete.id || productToDelete._id;
-      await api.request(`/products/${targetId}`, { method: 'DELETE' });
+      await api.deleteProduct(targetId);
       setAlertConfig({
         isOpen: true,
         title: "Deleted",
@@ -175,13 +218,22 @@ export const ProductDatabase = () => {
                   <td className="px-6 py-3 whitespace-nowrap text-right font-bold text-emerald-600">{(product.cuft || 0).toFixed(2)}</td>
                   {user?.role === 'admin' && (
                     <td className="px-6 py-3 whitespace-nowrap text-right">
-                      <button 
-                        onClick={() => setProductToDelete(product)} 
-                        className="text-gray-400 hover:text-red-600 transition-colors p-1"
-                        title="Delete product"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
+                      <div className="flex items-center justify-end gap-1">
+                        <button 
+                          onClick={() => handleOpenEdit(product)} 
+                          className="text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors p-1.5"
+                          title="Edit product"
+                        >
+                          <Pencil className="w-4 h-4" />
+                        </button>
+                        <button 
+                          onClick={() => setProductToDelete(product)} 
+                          className="text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors p-1.5"
+                          title="Delete product"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
                     </td>
                   )}
                 </tr>
@@ -211,37 +263,37 @@ export const ProductDatabase = () => {
               </button>
             </div>
 
-            <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+            <form onSubmit={handleSubmitAdd(onAddSubmit)} className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-semibold text-gray-700 mb-1">Company / Supplier</label>
-                  <input {...register('company')} type="text" placeholder="PREMIER" className="w-full border border-gray-300 rounded-lg text-sm p-2 uppercase focus:ring-2 focus:ring-indigo-500 focus:outline-none" />
-                  {errors.company && <p className="text-red-500 text-xs mt-1">{errors.company.message}</p>}
+                  <input {...registerAdd('company')} type="text" placeholder="PREMIER" className="w-full border border-gray-300 rounded-lg text-sm p-2 uppercase focus:ring-2 focus:ring-indigo-500 focus:outline-none" />
+                  {errorsAdd.company && <p className="text-red-500 text-xs mt-1">{errorsAdd.company.message}</p>}
                 </div>
                 <div>
                   <label className="block text-xs font-semibold text-gray-700 mb-1">Model Number</label>
-                  <input {...register('model')} type="text" placeholder="MW-6647" className="w-full border border-gray-300 rounded-lg text-sm p-2 uppercase font-mono focus:ring-2 focus:ring-indigo-500 focus:outline-none" />
-                  {errors.model && <p className="text-red-500 text-xs mt-1">{errors.model.message}</p>}
+                  <input {...registerAdd('model')} type="text" placeholder="MW-6647" className="w-full border border-gray-300 rounded-lg text-sm p-2 uppercase font-mono focus:ring-2 focus:ring-indigo-500 focus:outline-none" />
+                  {errorsAdd.model && <p className="text-red-500 text-xs mt-1">{errorsAdd.model.message}</p>}
                 </div>
               </div>
 
               <div>
                 <label className="block text-xs font-semibold text-gray-700 mb-1">Description</label>
-                <input {...register('description')} type="text" placeholder="Microwave 0.7 cuft" className="w-full border border-gray-300 rounded-lg text-sm p-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none" />
-                {errors.description && <p className="text-red-500 text-xs mt-1">{errors.description.message}</p>}
+                <input {...registerAdd('description')} type="text" placeholder="Microwave 0.7 cuft" className="w-full border border-gray-300 rounded-lg text-sm p-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none" />
+                {errorsAdd.description && <p className="text-red-500 text-xs mt-1">{errorsAdd.description.message}</p>}
               </div>
 
               <div className="grid grid-cols-2 gap-4">
                 {user?.role === 'admin' && (
                   <div>
                     <label className="block text-xs font-semibold text-gray-700 mb-1">Cubic Feet (Cuft) *</label>
-                    <input {...register('cuft', { valueAsNumber: true })} type="number" step="0.01" placeholder="0.85" className="w-full border border-gray-300 rounded-lg text-sm p-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none font-bold" />
-                    {errors.cuft && <p className="text-red-500 text-xs mt-1">{errors.cuft.message}</p>}
+                    <input {...registerAdd('cuft', { valueAsNumber: true })} type="number" step="0.01" placeholder="0.85" className="w-full border border-gray-300 rounded-lg text-sm p-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none font-bold text-emerald-700" />
+                    {errorsAdd.cuft && <p className="text-red-500 text-xs mt-1">{errorsAdd.cuft.message}</p>}
                   </div>
                 )}
                 <div className={user?.role === 'staff' ? "col-span-2" : ""}>
                   <label className="block text-xs font-semibold text-gray-700 mb-1">Category</label>
-                  <input {...register('category')} type="text" placeholder="Kitchen" className="w-full border border-gray-300 rounded-lg text-sm p-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none" />
+                  <input {...registerAdd('category')} type="text" placeholder="Kitchen" className="w-full border border-gray-300 rounded-lg text-sm p-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none" />
                 </div>
               </div>
 
@@ -249,6 +301,68 @@ export const ProductDatabase = () => {
                 <button type="button" onClick={() => setShowAddModal(false)} className="px-4 py-2 border border-gray-300 rounded-lg text-sm text-gray-700">Cancel</button>
                 <button type="submit" className="px-5 py-2 bg-indigo-600 text-white rounded-lg text-sm font-semibold hover:bg-indigo-700 shadow-md">
                   {user?.role === 'admin' ? 'Save Product' : 'Submit Request'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Product Modal */}
+      {productToEdit && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-sm overflow-y-auto" onClick={() => setProductToEdit(null)}>
+          <div className="relative w-full max-w-lg bg-white rounded-2xl shadow-2xl p-6" onClick={e => e.stopPropagation()}>
+            <div className="flex justify-between items-center mb-5 pb-3 border-b border-gray-100">
+              <div className="flex items-center gap-2">
+                <div className="p-2 bg-indigo-50 text-indigo-600 rounded-lg">
+                  <Pencil className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-gray-900">Edit Product Details</h3>
+                  <p className="text-xs text-gray-500 font-mono">{productToEdit.model}</p>
+                </div>
+              </div>
+              <button onClick={() => setProductToEdit(null)} className="text-gray-400 hover:text-gray-600">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleSubmitEdit(onEditSubmit)} className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">Company / Supplier</label>
+                  <input {...registerEdit('company')} type="text" placeholder="PREMIER" className="w-full border border-gray-300 rounded-lg text-sm p-2 uppercase focus:ring-2 focus:ring-indigo-500 focus:outline-none" />
+                  {errorsEdit.company && <p className="text-red-500 text-xs mt-1">{errorsEdit.company.message}</p>}
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">Model Number</label>
+                  <input {...registerEdit('model')} type="text" placeholder="MW-6647" className="w-full border border-gray-300 rounded-lg text-sm p-2 uppercase font-mono focus:ring-2 focus:ring-indigo-500 focus:outline-none" />
+                  {errorsEdit.model && <p className="text-red-500 text-xs mt-1">{errorsEdit.model.message}</p>}
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 mb-1">Description</label>
+                <input {...registerEdit('description')} type="text" placeholder="Microwave 0.7 cuft" className="w-full border border-gray-300 rounded-lg text-sm p-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none" />
+                {errorsEdit.description && <p className="text-red-500 text-xs mt-1">{errorsEdit.description.message}</p>}
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">Cubic Feet (Cuft) *</label>
+                  <input {...registerEdit('cuft', { valueAsNumber: true })} type="number" step="0.01" placeholder="0.85" className="w-full border border-gray-300 rounded-lg text-sm p-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none font-bold text-emerald-700" />
+                  {errorsEdit.cuft && <p className="text-red-500 text-xs mt-1">{errorsEdit.cuft.message}</p>}
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">Category</label>
+                  <input {...registerEdit('category')} type="text" placeholder="Kitchen" className="w-full border border-gray-300 rounded-lg text-sm p-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none" />
+                </div>
+              </div>
+
+              <div className="pt-4 flex justify-end gap-2 border-t border-gray-100">
+                <button type="button" onClick={() => setProductToEdit(null)} className="px-4 py-2 border border-gray-300 rounded-lg text-sm text-gray-700 hover:bg-gray-50">Cancel</button>
+                <button type="submit" className="px-5 py-2 bg-indigo-600 text-white rounded-lg text-sm font-semibold hover:bg-indigo-700 shadow-md">
+                  Save Changes
                 </button>
               </div>
             </form>
