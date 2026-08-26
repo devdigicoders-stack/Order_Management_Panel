@@ -82,10 +82,26 @@ class ApiClient {
     });
   }
 
+  buildQuery(params = {}) {
+    const cleanParams = new URLSearchParams();
+    for (const [key, value] of Object.entries(params)) {
+      if (
+        value !== undefined &&
+        value !== null &&
+        value !== '' &&
+        value !== 'undefined' &&
+        value !== 'null'
+      ) {
+        cleanParams.append(key, value);
+      }
+    }
+    const query = cleanParams.toString();
+    return query ? `?${query}` : '';
+  }
+
   // Products Endpoints
   getProducts(params = {}) {
-    const query = new URLSearchParams(params).toString();
-    return this.request(`/products${query ? `?${query}` : ''}`);
+    return this.request(`/products${this.buildQuery(params)}`);
   }
 
   getCompanies() {
@@ -153,8 +169,7 @@ class ApiClient {
   }
 
   getOrderMatrix(params = {}) {
-    const query = new URLSearchParams(params).toString();
-    return this.request(`/orders/matrix${query ? `?${query}` : ''}`);
+    return this.request(`/orders/matrix${this.buildQuery(params)}`);
   }
 
   getCompanyView(company) {
@@ -237,11 +252,11 @@ class ApiClient {
   }
 
   getPendingItems(staffId) {
-    return this.request(`/distribution/pending${staffId ? `?staffId=${staffId}` : ''}`);
+    return this.request(`/distribution/pending${this.buildQuery({ staffId })}`);
   }
 
   getReceivedItems(staffId) {
-    return this.request(`/distribution/received${staffId ? `?staffId=${staffId}` : ''}`);
+    return this.request(`/distribution/received${this.buildQuery({ staffId })}`);
   }
 
   getProductContainerHistory(productId) {
@@ -250,8 +265,7 @@ class ApiClient {
 
   // Audit Logs Endpoints
   getAuditLogs(params = {}) {
-    const query = new URLSearchParams(params).toString();
-    return this.request(`/audit${query ? `?${query}` : ''}`);
+    return this.request(`/audit${this.buildQuery(params)}`);
   }
 
   // Staff Management Endpoints

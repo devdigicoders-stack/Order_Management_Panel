@@ -37,7 +37,11 @@ export const ProductDatabase = () => {
   const loadProducts = async () => {
     setLoading(true);
     try {
-      const data = await api.getProducts({ search: searchTerm || undefined });
+      const params = {};
+      if (searchTerm && searchTerm.trim()) {
+        params.search = searchTerm.trim();
+      }
+      const data = await api.getProducts(params);
       setProductsList(data || []);
     } catch (err) {
       console.warn('Failed to load products:', err.message);

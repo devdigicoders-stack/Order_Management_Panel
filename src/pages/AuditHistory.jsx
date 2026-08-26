@@ -28,11 +28,11 @@ export const AuditHistory = () => {
   const fetchLogs = async () => {
     setLoading(true);
     try {
-      const data = await api.getAuditLogs({
-        search: search || undefined,
-        action: selectedAction !== 'All' ? selectedAction : undefined,
-        userId: selectedUser !== 'All' ? selectedUser : undefined,
-      });
+      const params = {};
+      if (search && search.trim()) params.search = search.trim();
+      if (selectedAction && selectedAction !== 'All') params.action = selectedAction;
+      if (selectedUser && selectedUser !== 'All') params.userId = selectedUser;
+      const data = await api.getAuditLogs(params);
       setLogs(data.logs || []);
     } catch (err) {
       console.error('Failed to fetch audit logs:', err);
