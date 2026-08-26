@@ -28,16 +28,18 @@ const EditableOrderCell = ({ getValue, row, column, table }) => {
     setValue(initialValue);
   }, [initialValue]);
 
-  // If user is admin or the staff member this column belongs to, it's editable
+  // Only the staff member this column belongs to can edit
   const currentUserId = table.options.meta?.userId?.toString();
   const columnStaffId = column.id?.toString();
-  const isEditable = table.options.meta?.userRole === 'admin' || currentUserId === columnStaffId;
+  const isEditable = table.options.meta?.userRole === 'staff' && currentUserId === columnStaffId;
 
   if (!isEditable) {
-    return value > 0 ? (
-      <span className="font-medium text-gray-700">{value}</span>
+    return Number(value) > 0 ? (
+      <span className="inline-flex items-center justify-center font-bold text-gray-800 bg-gray-100/90 border border-gray-200 min-w-[36px] px-2 py-0.5 rounded text-xs">
+        {value}
+      </span>
     ) : (
-      <span className="text-gray-300">-</span>
+      <span className="text-gray-300 font-light">-</span>
     );
   }
 
@@ -76,13 +78,16 @@ export const Dashboard = () => {
   const loadData = async () => {
     setLoading(true);
     try {
-      const [data] = await Promise.all([
+      const promises = [
         fetchOrderMatrix({
           company: selectedCompany !== 'All' ? selectedCompany : undefined,
           search: globalFilter || undefined
-        }),
-        fetchFavorites()
-      ]);
+        })
+      ];
+      if (user?.role === 'staff') {
+        promises.push(fetchFavorites());
+      }
+      const [data] = await Promise.all(promises);
       if (data?.matrix) {
         const uniqueCompanies = ['All', ...new Set(data.matrix.map(p => p.company))];
         setCompanies(uniqueCompanies);
@@ -114,6 +119,7 @@ export const Dashboard = () => {
 
   // Define Columns dynamically based on Staff
   const columns = useMemo(() => {
+    const isStaff = user?.role === 'staff';
     const cols = [
       {
         accessorKey: 'model',
@@ -123,17 +129,19 @@ export const Dashboard = () => {
           const isFav = favorites.includes(rowId);
           return (
             <div className="flex items-center gap-1.5">
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  toggleFavorite(rowId);
-                }}
-                className="p-1 hover:bg-gray-100 rounded text-gray-300 hover:text-amber-500 transition-colors"
-                title={isFav ? "Remove from favorites" : "Add to favorites"}
-              >
-                <Star className={clsx("w-3.5 h-3.5", isFav ? "fill-amber-400 text-amber-500" : "text-gray-300")} />
-              </button>
+              {isStaff && (
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    toggleFavorite(rowId);
+                  }}
+                  className="p-1 hover:bg-gray-100 rounded text-gray-300 hover:text-amber-500 transition-colors"
+                  title={isFav ? "Remove from favorites" : "Add to favorites"}
+                >
+                  <Star className={clsx("w-3.5 h-3.5", isFav ? "fill-amber-400 text-amber-500" : "text-gray-300")} />
+                </button>
+              )}
               <span className="font-semibold text-gray-900">{info.getValue()}</span>
             </div>
           );
@@ -169,7 +177,7 @@ export const Dashboard = () => {
     });
 
     return cols;
-  }, [staff]);
+  }, [staff, user?.role, favorites]);
 
   const table = useReactTable({
     data,
@@ -269,20 +277,22 @@ export const Dashboard = () => {
               {companies.map(c => <option key={c} value={c}>{c}</option>)}
             </select>
 
-            <button 
-              type="button"
-              onClick={() => setShowFavoritesOnly(!showFavoritesOnly)}
-              className={clsx(
-                "flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-all shadow-sm",
-                showFavoritesOnly
-                  ? "bg-amber-400 text-amber-950 shadow-amber-400/30"
-                  : "bg-white/10 hover:bg-white/20 text-white"
-              )}
-              title="Show only favorited products"
-            >
-              <Star className={clsx("w-3.5 h-3.5", showFavoritesOnly ? "fill-amber-950 text-amber-950" : "fill-amber-400 text-amber-400")} />
-              <span>Favorites</span>
-            </button>
+            {user?.role === 'staff' && (
+              <button 
+                type="button"
+                onClick={() => setShowFavoritesOnly(!showFavoritesOnly)}
+                className={clsx(
+                  "flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-bold transition-all shadow-sm",
+                  showFavoritesOnly
+                    ? "bg-amber-400 text-amber-950 shadow-amber-400/30"
+                    : "bg-white/10 hover:bg-white/20 text-white"
+                )}
+                title="Show only favorited products"
+              >
+                <Star className={clsx("w-3.5 h-3.5", showFavoritesOnly ? "fill-amber-950 text-amber-950" : "fill-amber-400 text-amber-400")} />
+                <span>Favorites</span>
+              </button>
+            )}
 
             <button 
               onClick={loadData}
