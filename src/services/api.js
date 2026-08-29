@@ -200,10 +200,19 @@ class ApiClient {
     });
   }
 
-  markOrderSent(orderId) {
-    return this.request(`/orders/${orderId}/mark-sent`, {
-      method: 'POST'
+  updateOrderNotes(orderId, notes) {
+    return this.request(`/orders/${orderId}/notes`, {
+      method: 'PATCH',
+      body: JSON.stringify({ notes }),
     });
+  }
+
+  markOrderSent(orderId, productIds = null) {
+    const options = { method: 'POST' };
+    if (productIds) {
+      options.body = JSON.stringify({ productIds });
+    }
+    return this.request(`/orders/${orderId}/mark-sent`, options);
   }
 
   combineOrders(orderId, targetOrderId) {

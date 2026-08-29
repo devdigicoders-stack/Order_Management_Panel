@@ -9,6 +9,29 @@ export const StaffOrders = () => {
   const [loading, setLoading] = useState(false);
   const [search, setSearch] = useState('');
   const [selectedOrder, setSelectedOrder] = useState(null);
+  const [orderNotes, setOrderNotes] = useState('');
+  const [savingNotes, setSavingNotes] = useState(false);
+
+  const handleSelectOrder = (order) => {
+    setSelectedOrder(order);
+    setOrderNotes(order.notes || '');
+  };
+
+  const handleSaveNotes = async () => {
+    if (!selectedOrder) return;
+    setSavingNotes(true);
+    try {
+      const orderId = selectedOrder.id || selectedOrder._id;
+      await api.updateOrderNotes(orderId, orderNotes);
+      // Update local lists
+      setOrdersList(prev => prev.map(o => (o.id === orderId || o._id === orderId) ? { ...o, notes: orderNotes } : o));
+      setSelectedOrder(prev => ({ ...prev, notes: orderNotes }));
+    } catch (err) {
+      console.warn("Failed to save notes:", err.message);
+    } finally {
+      setSavingNotes(false);
+    }
+  };
 
   const loadOrders = async () => {
     setLoading(true);
@@ -149,7 +172,7 @@ export const StaffOrders = () => {
                   </td>
                   <td className="px-6 py-3.5 whitespace-nowrap text-right">
                     <button
-                      onClick={() => setSelectedOrder(order)}
+                      onClick={() => handleSelectOrder(order)}
                       className="px-2.5 py-1 bg-gray-100 hover:bg-indigo-50 text-gray-700 hover:text-indigo-600 rounded text-xs font-semibold flex items-center gap-1 ml-auto"
                     >
                       <Eye className="w-3.5 h-3.5" /> View
@@ -206,6 +229,28 @@ export const StaffOrders = () => {
               {(!selectedOrder.items || selectedOrder.items.length === 0) && (
                 <p className="text-center py-6 text-gray-400">No items listed in this batch.</p>
               )}
+            </div>
+
+            {/* Order Notes Section */}
+            <div className="pt-3 border-t border-gray-100 space-y-1 text-left">
+              <span className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Order Notes</span>
+              <textarea
+                value={orderNotes}
+                onChange={(e) => setOrderNotes(e.target.value)}
+                placeholder="Write order details, instructions, or supplier remarks..."
+                className="w-full border border-gray-300 rounded-lg text-xs p-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none bg-gray-50/50"
+                rows="2"
+              />
+              <div className="flex items-center justify-end">
+                <button
+                  type="button"
+                  onClick={handleSaveNotes}
+                  disabled={savingNotes}
+                  className="px-3 py-1 bg-indigo-600 hover:bg-indigo-700 text-white rounded text-[11px] font-semibold flex items-center gap-1 shadow-sm disabled:opacity-50"
+                >
+                  {savingNotes ? 'Saving...' : 'Save Notes'}
+                </button>
+              </div>
             </div>
 
             <div className="pt-3 border-t border-gray-100 flex items-center justify-between text-xs">

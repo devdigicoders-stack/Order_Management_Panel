@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Building2, Download, RefreshCw, Loader2, Package, Send, Merge, CheckCircle, Layers, AlertCircle } from 'lucide-react';
+import { Building2, Download, RefreshCw, Loader2, Package, Send, Merge, CheckCircle, Layers, AlertCircle, X } from 'lucide-react';
 import { AlertModal } from '../components/ui/AlertModal';
 import api from '../services/api';
 import clsx from 'clsx';
@@ -12,6 +12,9 @@ export const CompanyView = () => {
   const [loading, setLoading] = useState(false);
   const [actionLoading, setActionLoading] = useState(false);
   const [alertConfig, setAlertConfig] = useState({ isOpen: false, title: '', message: '', type: 'success' });
+  const [showSendModal, setShowSendModal] = useState(false);
+  const [orderToSend, setOrderToSend] = useState(null);
+  const [selectedProductIds, setSelectedProductIds] = useState([]);
 
   const loadCompanies = async () => {
     try {
@@ -68,6 +71,43 @@ export const CompanyView = () => {
         message: "Order batch marked as Sent to Supplier successfully.",
         type: "success"
       });
+      loadCompanyDetails();
+    } catch (err) {
+      setAlertConfig({
+        isOpen: true,
+        title: "Error",
+        message: err.message || "Failed to update order status.",
+        type: "danger"
+      });
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleOpenSendModal = (order) => {
+    setOrderToSend(order);
+    const ids = (order.items || []).map(i => i.productId);
+    setSelectedProductIds(ids);
+    setShowSendModal(true);
+  };
+
+  const handleConfirmSend = async () => {
+    if (!orderToSend) return;
+    setActionLoading(true);
+    try {
+      const orderId = orderToSend.id || orderToSend._id;
+      const isSubset = selectedProductIds.length > 0 && selectedProductIds.length < (orderToSend.items || []).length;
+      await api.markOrderSent(orderId, isSubset ? selectedProductIds : null);
+      setAlertConfig({
+        isOpen: true,
+        title: "Purchase Order Sent",
+        message: isSubset 
+          ? "Selected items marked as Sent to Supplier. Remaining items split into a new batch."
+          : "Full order batch marked as Sent to Supplier successfully.",
+        type: "success"
+      });
+      setShowSendModal(false);
+      setOrderToSend(null);
       loadCompanyDetails();
     } catch (err) {
       setAlertConfig({
@@ -222,10 +262,32 @@ export const CompanyView = () => {
                     </div>
                   </div>
 
+                  {/* Notes Area in Batch Card */}
+                  <div className="mt-1 space-y-1 text-left">
+                    <label className="text-[10px] font-bold text-gray-400 uppercase tracking-wider block">Notes</label>
+                    <textarea
+                      defaultValue={ord.notes || ''}
+                      onBlur={async (e) => {
+                        const val = e.target.value;
+                        if (val !== (ord.notes || '')) {
+                          try {
+                            await api.updateOrderNotes(ord.id || ord._id, val);
+                            setOrders(prev => prev.map(o => (o.id === ord.id || o._id === ord._id) ? { ...o, notes: val } : o));
+                          } catch (err) {
+                            console.warn("Failed to update notes:", err.message);
+                          }
+                        }
+                      }}
+                      placeholder="Add notes for this batch..."
+                      className="w-full border border-gray-200 rounded p-1.5 text-xs bg-white focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                      rows="1"
+                    />
+                  </div>
+
                   <div className="flex items-center justify-end gap-2 pt-2 border-t border-gray-200/60">
                     {!isSent && (
                       <button
-                        onClick={() => handleMarkSent(ord.id || ord._id)}
+                        onClick={() => handleOpenSendModal(ord)}
                         disabled={actionLoading}
                         className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg text-xs font-semibold flex items-center gap-1 shadow-sm"
                       >
@@ -323,6 +385,77 @@ export const CompanyView = () => {
         message={alertConfig.message}
         type={alertConfig.type}
       />
+
+      {/* Partial Send Modal */}
+      {showSendModal && orderToSend && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-sm animate-in fade-in duration-200" onClick={() => { setShowSendModal(false); setOrderToSend(null); }}>
+          <div className="bg-white rounded-2xl max-w-md w-full p-6 shadow-2xl space-y-4 max-h-[85vh] flex flex-col" onClick={e => e.stopPropagation()}>
+            <div className="flex items-center justify-between pb-3 border-b border-gray-100">
+              <h3 className="font-bold text-gray-900 text-base">
+                Send PO: {orderToSend.orderNumber}
+              </h3>
+              <button onClick={() => { setShowSendModal(false); setOrderToSend(null); }} className="text-gray-400 hover:text-gray-600">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <p className="text-xs text-gray-500">
+              Select the items you wish to send to the supplier now. Unselected items will remain in a remainder batch.
+            </p>
+
+            <div className="space-y-2 overflow-y-auto flex-1 divide-y divide-gray-100 pr-1">
+              {(orderToSend.items || []).map((item) => {
+                const isChecked = selectedProductIds.includes(item.productId);
+                return (
+                  <label 
+                    key={item.productId}
+                    className="flex items-start gap-3 py-3 cursor-pointer text-xs"
+                  >
+                    <input 
+                      type="checkbox"
+                      checked={isChecked}
+                      onChange={() => {
+                        setSelectedProductIds(prev => 
+                          prev.includes(item.productId)
+                            ? prev.filter(id => id !== item.productId)
+                            : [...prev, item.productId]
+                        );
+                      }}
+                      className="mt-0.5 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500 w-4 h-4"
+                    />
+                    <div className="flex-1">
+                      <div className="flex justify-between font-bold text-gray-900">
+                        <span>{item.model}</span>
+                        <span className="text-indigo-600">x{item.quantity}</span>
+                      </div>
+                      <p className="text-[11px] text-gray-500 mt-0.5">{item.description}</p>
+                    </div>
+                  </label>
+                );
+              })}
+            </div>
+
+            <div className="pt-3 border-t border-gray-100 flex justify-end gap-2 text-xs">
+              <button
+                type="button"
+                onClick={() => { setShowSendModal(false); setOrderToSend(null); }}
+                className="px-4 py-2 border border-gray-300 rounded-lg font-bold text-gray-700 hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmSend}
+                disabled={actionLoading || selectedProductIds.length === 0}
+                className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-bold disabled:opacity-50 flex items-center gap-1.5 shadow-md"
+              >
+                {actionLoading && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                Confirm Send
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

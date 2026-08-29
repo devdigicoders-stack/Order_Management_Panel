@@ -10,7 +10,10 @@ const approvalSchema = z.object({
   model: z.string(),
   company: z.string(),
   description: z.string(),
-  cuft: z.number().min(0.01, 'Cubic feet is required and must be greater than 0'),
+  cuft: z.preprocess(
+    (val) => (val === '' || val === null || val === undefined || isNaN(Number(val)) ? undefined : Number(val)),
+    z.number().min(0, 'Cubic feet must be positive').optional()
+  ),
   category: z.string().optional(),
   notes: z.string().optional(),
 });
@@ -223,7 +226,7 @@ export const Approvals = () => {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-xs font-semibold text-gray-700 mb-1">
-                    Cubic Feet (Cuft) <span className="text-red-500">*</span>
+                    Cubic Feet (Cuft)
                   </label>
                   <input 
                     {...register('cuft', { valueAsNumber: true })} 

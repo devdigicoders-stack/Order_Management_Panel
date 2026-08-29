@@ -12,7 +12,10 @@ const productSchema = z.object({
   company: z.string().min(1, 'Company is required'),
   model: z.string().min(1, 'Model is required'),
   description: z.string().min(1, 'Description is required'),
-  cuft: z.number().min(0, 'Cubic feet must be positive').optional(),
+  cuft: z.preprocess(
+    (val) => (val === '' || val === null || val === undefined || isNaN(Number(val)) ? undefined : Number(val)),
+    z.number().min(0, 'Cubic feet must be positive').optional()
+  ),
   category: z.string().optional(),
 });
 
@@ -290,7 +293,7 @@ export const ProductDatabase = () => {
               <div className="grid grid-cols-2 gap-4">
                 {user?.role === 'admin' && (
                   <div>
-                    <label className="block text-xs font-semibold text-gray-700 mb-1">Cubic Feet (Cuft) *</label>
+                    <label className="block text-xs font-semibold text-gray-700 mb-1">Cubic Feet (Cuft)</label>
                     <input {...registerAdd('cuft', { valueAsNumber: true })} type="number" step="0.01" placeholder="0.85" className="w-full border border-gray-300 rounded-lg text-sm p-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none font-bold text-emerald-700" />
                     {errorsAdd.cuft && <p className="text-red-500 text-xs mt-1">{errorsAdd.cuft.message}</p>}
                   </div>
@@ -353,7 +356,7 @@ export const ProductDatabase = () => {
 
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-xs font-semibold text-gray-700 mb-1">Cubic Feet (Cuft) *</label>
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">Cubic Feet (Cuft)</label>
                   <input {...registerEdit('cuft', { valueAsNumber: true })} type="number" step="0.01" placeholder="0.85" className="w-full border border-gray-300 rounded-lg text-sm p-2 focus:ring-2 focus:ring-indigo-500 focus:outline-none font-bold text-emerald-700" />
                   {errorsEdit.cuft && <p className="text-red-500 text-xs mt-1">{errorsEdit.cuft.message}</p>}
                 </div>

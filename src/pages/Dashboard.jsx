@@ -28,10 +28,10 @@ const EditableOrderCell = ({ getValue, row, column, table }) => {
     setValue(initialValue);
   }, [initialValue]);
 
-  // Only the staff member this column belongs to can edit
+  // Only the staff member this column belongs to can edit, or if user is admin
   const currentUserId = table.options.meta?.userId?.toString();
   const columnStaffId = column.id?.toString();
-  const isEditable = table.options.meta?.userRole === 'staff' && currentUserId === columnStaffId;
+  const isEditable = (table.options.meta?.userRole === 'staff' && currentUserId === columnStaffId) || table.options.meta?.userRole === 'admin';
 
   if (!isEditable) {
     return Number(value) > 0 ? (
