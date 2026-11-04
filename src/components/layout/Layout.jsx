@@ -17,7 +17,8 @@ import {
  PackageCheck,
  Bell,
  Menu,
- X
+ X,
+ StickyNote
 } from 'lucide-react';
 import clsx from 'clsx';
 import { useStore } from '../../store/useStore';
@@ -64,6 +65,7 @@ export const Layout = () => {
  { name: 'Audit History', path: '/audit-history', icon: Clock, roles: ['admin'] },
  { name: 'Export Data', path: '/export', icon: FileText, roles: ['admin'] },
  { name: 'Manage Staff', path: '/manage-staff', icon: UserCog, roles: ['admin'] },
+ { name: 'Notes', path: '/notes', icon: StickyNote, roles: ['admin'] },
  ];
 
  const filteredNavItems = navItems.filter(item => item.roles.includes(user?.role));
@@ -181,9 +183,9 @@ export const Layout = () => {
   </div>
 
   {/* Mobile Header */}
-  <div className="md:hidden fixed top-0 left-0 right-0 h-14 bg-white border-b border-gray-200 z-40 flex items-center justify-between px-4 shadow-sm">
+  <div className="md:hidden fixed top-0 left-0 right-0 h-14 bg-white border-b border-gray-200 z-40 flex items-center justify-between px-3 shadow-xs">
     <div className="flex items-center gap-2">
-      <PackageSearch className="w-5 h-5 text-indigo-600" />
+      <PackageSearch className="w-5 h-5 text-indigo-600 flex-shrink-0" />
       <span className="font-bold text-gray-900 text-sm">OMS</span>
       <span className={clsx(
         "text-[10px] font-extrabold uppercase px-1.5 py-0.5 rounded tracking-wide",
@@ -194,18 +196,23 @@ export const Layout = () => {
         {user?.role === 'admin' ? '👑 Admin' : '👤 Staff'}
       </span>
     </div>
-    <div className="flex items-center space-x-3">
+    <div className="flex items-center space-x-2">
       {user?.role === 'staff' && (
-        <Link to="/notifications" className="relative p-2 text-gray-500 hover:text-gray-700">
+        <Link to="/notifications" className="relative p-1.5 text-gray-500 hover:text-gray-700">
           <Bell className="w-5 h-5" />
-          {unreadCount > 0 && <span className="absolute top-1.5 right-1.5 w-2 h-2 bg-red-500 rounded-full border border-white"></span>}
+          {unreadCount > 0 && <span className="absolute top-1 right-1 w-2 h-2 bg-red-500 rounded-full border border-white"></span>}
         </Link>
       )}
-      <Link to="/profile" className={clsx(
-        "w-8 h-8 rounded-full flex items-center justify-center font-bold text-white text-xs shadow-sm",
-        user?.role === 'admin' ? "bg-indigo-600" : "bg-blue-600"
-      )}>
-        {user?.name?.charAt(0) || 'U'}
+      <Link to="/profile" className="flex items-center gap-1.5 bg-gray-50 hover:bg-gray-100 px-2.5 py-1 rounded-full border border-gray-200 transition-colors">
+        <div className={clsx(
+          "w-6 h-6 rounded-full flex items-center justify-center font-bold text-white text-[11px] shadow-xs flex-shrink-0",
+          user?.role === 'admin' ? "bg-indigo-600" : "bg-blue-600"
+        )}>
+          {user?.name?.charAt(0) || 'U'}
+        </div>
+        <span className="text-xs font-bold text-gray-800 max-w-[100px] truncate">
+          {user?.name || 'User'}
+        </span>
       </Link>
     </div>
   </div>

@@ -207,6 +207,13 @@ class ApiClient {
     });
   }
 
+  addProductToOrder(orderId, { productId, quantity }) {
+    return this.request(`/orders/${orderId}/add-product`, {
+      method: 'POST',
+      body: JSON.stringify({ productId, quantity }),
+    });
+  }
+
   markOrderSent(orderId, productIds = null) {
     const options = { method: 'POST' };
     if (productIds) {
@@ -308,6 +315,44 @@ class ApiClient {
   markAllNotificationsAsRead() {
     return this.request('/notifications/mark-all-read', {
       method: 'POST',
+    });
+  }
+
+  // Notes Endpoints
+  getNotes(params = {}) {
+    return this.request(`/notes${this.buildQuery(params)}`);
+  }
+
+  createNote(noteData) {
+    return this.request('/notes', {
+      method: 'POST',
+      body: JSON.stringify(noteData),
+    });
+  }
+
+  updateNote(id, noteData) {
+    return this.request(`/notes/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(noteData),
+    });
+  }
+
+  updateNoteStatus(id, status, orderStatus) {
+    return this.request(`/notes/${id}/status`, {
+      method: 'PATCH',
+      body: JSON.stringify({ status, orderStatus }),
+    });
+  }
+
+  togglePinNote(id) {
+    return this.request(`/notes/${id}/pin`, {
+      method: 'PATCH',
+    });
+  }
+
+  deleteNote(id) {
+    return this.request(`/notes/${id}`, {
+      method: 'DELETE',
     });
   }
 }

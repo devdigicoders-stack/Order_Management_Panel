@@ -14,6 +14,7 @@ import { AuditHistory } from './pages/AuditHistory';
 import { Export } from './pages/Export';
 import { Profile } from './pages/Profile';
 import { StaffManagement } from './pages/StaffManagement';
+import { Notes } from './pages/Notes';
 
 // New Staff Pages
 import { StaffDashboard } from './pages/StaffDashboard';
@@ -55,6 +56,7 @@ function App() {
               <Route path="audit-history" element={<AuditHistory />} />
               <Route path="export" element={<Export />} />
               <Route path="manage-staff" element={<StaffManagement />} />
+              <Route path="notes" element={<Notes />} />
             </Route>
           </Route>
         </Route>

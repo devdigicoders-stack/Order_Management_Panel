@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Building2, Download, RefreshCw, Loader2, Package, Send, Merge, CheckCircle, Layers, AlertCircle, X } from 'lucide-react';
+import { Building2, Download, RefreshCw, Loader2, Package, Send, Merge, CheckCircle, Layers, AlertCircle, X, Plus } from 'lucide-react';
 import { AlertModal } from '../components/ui/AlertModal';
 import api from '../services/api';
 import clsx from 'clsx';
@@ -15,13 +15,26 @@ export const CompanyView = () => {
   const [showSendModal, setShowSendModal] = useState(false);
   const [orderToSend, setOrderToSend] = useState(null);
   const [selectedProductIds, setSelectedProductIds] = useState([]);
+  
+  // Add Product to Batch State
+  const [orderToAddProduct, setOrderToAddProduct] = useState(null);
+  const [allProducts, setAllProducts] = useState([]);
+  const [newProductId, setNewProductId] = useState('');
+  const [newProductQty, setNewProductQty] = useState(1);
 
   const loadCompanies = async () => {
     try {
-      const list = await api.getCompanies();
+      const [list, prods] = await Promise.all([
+        api.getCompanies(),
+        api.getProducts()
+      ]);
       if (list?.length > 0) {
         setCompanies(list);
         if (!list.includes(selectedCompany)) setSelectedCompany(list[0]);
+      }
+      if (prods?.length > 0) {
+        setAllProducts(prods);
+        setNewProductId(prods[0].id || prods[0]._id);
       }
     } catch (e) {
       console.warn('Companies list load error:', e.message);
@@ -137,6 +150,37 @@ export const CompanyView = () => {
         isOpen: true,
         title: "Combine Failed",
         message: err.message || "Failed to combine order batches.",
+        type: "danger"
+      });
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleAddProductToBatch = async (e) => {
+    e.preventDefault();
+    if (!orderToAddProduct || !newProductId || Number(newProductQty) <= 0) return;
+    setActionLoading(true);
+    try {
+      const orderId = orderToAddProduct.id || orderToAddProduct._id;
+      const res = await api.addProductToOrder(orderId, {
+        productId: newProductId,
+        quantity: Number(newProductQty)
+      });
+      setAlertConfig({
+        isOpen: true,
+        title: res.isNewOrder ? "New Order Batch Created" : "Product Added",
+        message: res.message || "Product added successfully.",
+        type: "success"
+      });
+      setOrderToAddProduct(null);
+      setNewProductQty(1);
+      loadCompanyDetails();
+    } catch (err) {
+      setAlertConfig({
+        isOpen: true,
+        title: "Failed to Add Product",
+        message: err.message || "An error occurred.",
         type: "danger"
       });
     } finally {
@@ -285,6 +329,15 @@ export const CompanyView = () => {
                   </div>
 
                   <div className="flex items-center justify-end gap-2 pt-2 border-t border-gray-200/60">
+                    <button
+                      onClick={() => setOrderToAddProduct(ord)}
+                      disabled={actionLoading}
+                      className="px-2.5 py-1.5 bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 rounded-lg text-xs font-semibold flex items-center gap-1 shadow-xs transition-colors"
+                      title="Add a new product (creates a new order batch)"
+                    >
+                      <Plus className="w-3 h-3 text-indigo-600" /> Add Product
+                    </button>
+
                     {!isSent && (
                       <button
                         onClick={() => handleOpenSendModal(ord)}
@@ -453,6 +506,83 @@ export const CompanyView = () => {
                 Confirm Send
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add Product to Order Modal */}
+      {orderToAddProduct && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl max-w-lg w-full p-6 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-gray-100">
+              <div>
+                <h3 className="font-bold text-gray-900 text-base flex items-center gap-2">
+                  <span>Add Product: {orderToAddProduct.orderNumber}</span>
+                  <span className="px-2 py-0.5 bg-indigo-50 text-indigo-700 text-xs font-bold rounded">
+                    {orderToAddProduct.batchNumber || 'Batch 1'}
+                  </span>
+                </h3>
+                <p className="text-xs text-gray-500 mt-0.5">Staff: {orderToAddProduct.staffName} • Status: {orderToAddProduct.status}</p>
+              </div>
+              <button onClick={() => setOrderToAddProduct(null)} className="text-gray-400 hover:text-gray-600 p-1">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="flex items-start gap-2 bg-amber-50 border border-amber-200 p-3 rounded-xl text-amber-800 text-xs">
+              <AlertCircle className="w-4 h-4 flex-shrink-0 text-amber-600 mt-0.5" />
+              <p>
+                <strong>New Order Policy:</strong> Order <strong>{orderToAddProduct.orderNumber}</strong> is already placed/active. Adding a new product will automatically generate a <strong>NEW ORDER</strong> batch!
+              </p>
+            </div>
+
+            <form onSubmit={handleAddProductToBatch} className="space-y-3 text-xs">
+              <div>
+                <label className="block text-[10px] font-bold text-gray-700 uppercase tracking-wider mb-1">Select Product</label>
+                <select
+                  value={newProductId}
+                  onChange={(e) => setNewProductId(e.target.value)}
+                  className="w-full border border-gray-300 rounded-lg p-2.5 text-xs bg-white font-medium focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                  required
+                >
+                  {allProducts.map(p => (
+                    <option key={p.id || p._id} value={p.id || p._id}>
+                      {p.model} - {p.description} ({p.company}) [{p.cuft || 0} cuft]
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-bold text-gray-700 uppercase tracking-wider mb-1">Quantity</label>
+                <input
+                  type="number"
+                  min="1"
+                  value={newProductQty}
+                  onChange={(e) => setNewProductQty(Math.max(1, parseInt(e.target.value) || 1))}
+                  className="w-full border border-gray-300 rounded-lg p-2 text-xs bg-white font-bold text-center focus:ring-2 focus:ring-indigo-500 focus:outline-none"
+                  required
+                />
+              </div>
+
+              <div className="pt-3 border-t border-gray-100 flex justify-end gap-2 text-xs">
+                <button
+                  type="button"
+                  onClick={() => setOrderToAddProduct(null)}
+                  className="px-4 py-2 border border-gray-300 rounded-lg font-bold text-gray-700 hover:bg-gray-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={actionLoading}
+                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg font-bold disabled:opacity-50 flex items-center gap-1.5 shadow-md"
+                >
+                  {actionLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
+                  Create as New Order
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}
