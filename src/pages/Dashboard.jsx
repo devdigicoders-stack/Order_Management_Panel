@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useEffect } from 'react';
+import React, { useMemo, useState, useEffect, useCallback } from 'react';
 import { useStore } from '../store/useStore';
 import { 
   useReactTable, 
@@ -27,12 +27,52 @@ import {
 import { AlertModal } from '../components/ui/AlertModal';
 import clsx from 'clsx';
 
+// Isolated input for mobile cards: keeps local display value while focused,
+// syncs from store only when not editing.
+const MobileQtyInput = ({ storeQty, onCommit }) => {
+  const [localVal, setLocalVal] = useState(storeQty === 0 ? '' : String(storeQty));
+  const [isFocused, setIsFocused] = useState(false);
+
+  useEffect(() => {
+    if (!isFocused) {
+      setLocalVal(storeQty === 0 ? '' : String(storeQty));
+    }
+  }, [storeQty]);
+
+  const handleBlur = () => {
+    setIsFocused(false);
+    const parsed = Math.max(0, parseInt(localVal) || 0);
+    onCommit(parsed);
+    setLocalVal(parsed === 0 ? '' : String(parsed));
+  };
+
+  return (
+    <input
+      type="number"
+      min="0"
+      value={localVal}
+      placeholder="0"
+      onFocus={() => setIsFocused(true)}
+      onChange={(e) => setLocalVal(e.target.value)}
+      onBlur={handleBlur}
+      className={clsx(
+        "w-14 h-8 text-center text-sm font-bold border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500",
+        storeQty > 0
+          ? "bg-indigo-600 text-white border-indigo-600 shadow-xs"
+          : "bg-white text-gray-700 border-gray-200"
+      )}
+    />
+  );
+};
+
 const EditableOrderCell = ({ getValue, row, column, table }) => {
   const initialValue = getValue() || 0;
   const [value, setValue] = useState(initialValue);
+  const [isFocused, setIsFocused] = useState(false);
   const updateOrderCell = useStore(state => state.updateOrderCell);
   
   const onBlur = () => {
+    setIsFocused(false);
     const productId = row.original.id;
     const staffId = column.id;
     if (Number(value) !== Number(initialValue)) {
@@ -40,8 +80,12 @@ const EditableOrderCell = ({ getValue, row, column, table }) => {
     }
   };
 
+  // Only sync from store when the cell is NOT actively being edited,
+  // so external refreshes don't overwrite the user's in-progress typing.
   useEffect(() => {
-    setValue(initialValue);
+    if (!isFocused) {
+      setValue(initialValue);
+    }
   }, [initialValue]);
 
   // Only the staff member this column belongs to can edit, or if user is admin
@@ -64,6 +108,7 @@ const EditableOrderCell = ({ getValue, row, column, table }) => {
       type="number"
       value={value === 0 ? '' : value}
       placeholder="0"
+      onFocus={() => setIsFocused(true)}
       onChange={e => setValue(e.target.value === '' ? 0 : Number(e.target.value))}
       onBlur={onBlur}
       className={`w-16 border rounded text-center text-sm py-1 focus:ring-indigo-500 focus:border-indigo-500 shadow-sm ${
@@ -192,7 +237,9 @@ export const Dashboard = () => {
     updateOrderCell(productId, activeStaffId, newQty);
   };
 
-  const handleDirectInputChange = (productId, val) => {
+  // Commit the quantity only when the user finishes typing (on blur),
+  // not on every keystroke — prevents race conditions with live store updates.
+  const handleDirectInputCommit = (productId, val) => {
     if (!activeStaffId) return;
     const newQty = Math.max(0, parseInt(val) || 0);
     updateOrderCell(productId, activeStaffId, newQty);
@@ -616,18 +663,9 @@ export const Dashboard = () => {
                       <Minus className="w-3.5 h-3.5" />
                     </button>
 
-                    <input
-                      type="number"
-                      min="0"
-                      value={currentQty === 0 ? '' : currentQty}
-                      placeholder="0"
-                      onChange={(e) => handleDirectInputChange(itemId, e.target.value)}
-                      className={clsx(
-                        "w-14 h-8 text-center text-sm font-bold border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500",
-                        currentQty > 0 
-                          ? "bg-indigo-600 text-white border-indigo-600 shadow-xs" 
-                          : "bg-white text-gray-700 border-gray-200"
-                      )}
+                    <MobileQtyInput
+                      storeQty={currentQty}
+                      onCommit={(newQty) => handleDirectInputCommit(itemId, newQty)}
                     />
 
                     <button
