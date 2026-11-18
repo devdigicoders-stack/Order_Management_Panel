@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useStore } from '../store/useStore';
-import { Container, ArrowRight, Plus, X, RefreshCw, Loader2, CheckCircle2 } from 'lucide-react';
+import { Container, ArrowRight, Plus, X, RefreshCw, Loader2, CheckCircle2, Pencil, Trash2, Check } from 'lucide-react';
 import api from '../services/api';
 import { AlertModal } from '../components/ui/AlertModal';
+import { ConfirmModal } from '../components/ui/ConfirmModal';
 
 export const ContainerPlanner = () => {
   const [containersList, setContainersList] = useState([]);
@@ -17,6 +18,12 @@ export const ContainerPlanner = () => {
   const [newContainerName, setNewContainerName] = useState('');
   const [newContainerCapacity, setNewContainerCapacity] = useState('2400');
   const [alertConfig, setAlertConfig] = useState({ isOpen: false, title: '', message: '', type: 'success' });
+
+  // Rename state
+  const [renamingId, setRenamingId] = useState(null);
+  const [renameValue, setRenameValue] = useState('');
+  // Delete confirm state
+  const [confirmDelete, setConfirmDelete] = useState({ isOpen: false, containerId: null, containerName: '' });
 
   const loadAll = async () => {
     setLoading(true);
@@ -156,6 +163,36 @@ export const ContainerPlanner = () => {
     }
   };
 
+  const handleStartRename = (container) => {
+    setRenamingId(container.id || container._id);
+    setRenameValue(container.name);
+  };
+
+  const handleRenameSubmit = async (containerId) => {
+    if (!renameValue.trim()) return;
+    try {
+      await api.renameContainer(containerId, renameValue.trim());
+      setAlertConfig({ isOpen: true, title: 'Renamed', message: `Container renamed to "${renameValue.trim()}"`, type: 'success' });
+      setRenamingId(null);
+      loadAll();
+    } catch (err) {
+      setAlertConfig({ isOpen: true, title: 'Error', message: err.message || 'Failed to rename container.', type: 'danger' });
+    }
+  };
+
+  const handleDeleteConfirmed = async () => {
+    const { containerId, containerName } = confirmDelete;
+    setConfirmDelete({ isOpen: false, containerId: null, containerName: '' });
+    try {
+      await api.deleteContainer(containerId);
+      setAlertConfig({ isOpen: true, title: 'Deleted', message: `Container "${containerName}" has been deleted.`, type: 'success' });
+      if (targetContainerId === containerId) setTargetContainerId('');
+      loadAll();
+    } catch (err) {
+      setAlertConfig({ isOpen: true, title: 'Cannot Delete', message: err.message || 'Failed to delete container.', type: 'danger' });
+    }
+  };
+
   return (
     <div className="space-y-6 h-full flex flex-col mb-10">
       {/* Header */}
@@ -285,19 +322,65 @@ export const ContainerPlanner = () => {
               >
                 <div className={`p-5 border-b border-gray-100 rounded-t-xl ${isTarget ? 'bg-indigo-50/40' : 'bg-gray-50/50'}`}>
                   <div className="flex justify-between items-start mb-3">
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <Container className="w-5 h-5 text-indigo-600" />
-                        <h2 className="font-bold text-gray-900 text-base">{container.name}</h2>
-                        {isTarget && (
-                          <span className="bg-indigo-100 text-indigo-700 text-[10px] px-2 py-0.5 rounded-full font-bold uppercase">
-                            Target
+                    <div className="flex-1 min-w-0">
+                      {renamingId === containerId ? (
+                        <div className="flex items-center gap-2">
+                          <Container className="w-5 h-5 text-indigo-600 flex-shrink-0" />
+                          <input
+                            autoFocus
+                            type="text"
+                            value={renameValue}
+                            onChange={e => setRenameValue(e.target.value)}
+                            onKeyDown={e => {
+                              if (e.key === 'Enter') handleRenameSubmit(containerId);
+                              if (e.key === 'Escape') setRenamingId(null);
+                            }}
+                            className="border border-indigo-400 rounded px-2 py-0.5 text-sm font-bold text-gray-900 focus:outline-none focus:ring-2 focus:ring-indigo-500 w-40"
+                          />
+                          <button
+                            onClick={() => handleRenameSubmit(containerId)}
+                            className="p-1 bg-indigo-600 text-white rounded hover:bg-indigo-700"
+                            title="Save name"
+                          >
+                            <Check className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={() => setRenamingId(null)}
+                            className="p-1 bg-gray-100 text-gray-500 rounded hover:bg-gray-200"
+                            title="Cancel"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2">
+                          <Container className="w-5 h-5 text-indigo-600" />
+                          <h2 className="font-bold text-gray-900 text-base">{container.name}</h2>
+                          {isTarget && (
+                            <span className="bg-indigo-100 text-indigo-700 text-[10px] px-2 py-0.5 rounded-full font-bold uppercase">
+                              Target
+                            </span>
+                          )}
+                          <span className="text-xs uppercase font-bold text-gray-500 bg-gray-200 px-2 py-0.5 rounded">
+                            {container.status || 'draft'}
                           </span>
-                        )}
-                        <span className="text-xs uppercase font-bold text-gray-500 bg-gray-200 px-2 py-0.5 rounded">
-                          {container.status || 'draft'}
-                        </span>
-                      </div>
+                          {/* Rename & Delete buttons */}
+                          <button
+                            onClick={() => handleStartRename(container)}
+                            className="ml-1 p-1 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded transition-colors"
+                            title="Rename container"
+                          >
+                            <Pencil className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            onClick={() => setConfirmDelete({ isOpen: true, containerId, containerName: container.name })}
+                            className="p-1 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded transition-colors"
+                            title="Delete container"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      )}
                       <p className="text-xs text-gray-500 mt-1">Capacity: {capacity} cuft | Used: {usedCuft} cuft</p>
                     </div>
 
@@ -393,6 +476,37 @@ export const ContainerPlanner = () => {
         message={alertConfig.message}
         type={alertConfig.type}
       />
+
+      {/* Delete Confirmation Modal */}
+      {confirmDelete.isOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-6">
+            <div className="flex items-center gap-3 mb-3">
+              <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0">
+                <Trash2 className="w-5 h-5 text-red-600" />
+              </div>
+              <h3 className="text-base font-bold text-gray-900">Delete Container?</h3>
+            </div>
+            <p className="text-sm text-gray-600 mb-5">
+              Are you sure you want to delete <strong>"{confirmDelete.containerName}"</strong>? This cannot be undone.
+            </p>
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => setConfirmDelete({ isOpen: false, containerId: null, containerName: '' })}
+                className="px-4 py-2 border border-gray-300 rounded-lg text-sm text-gray-700 hover:bg-gray-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDeleteConfirmed}
+                className="px-5 py-2 bg-red-600 text-white rounded-lg text-sm font-semibold hover:bg-red-700 shadow-sm"
+              >
+                Delete
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

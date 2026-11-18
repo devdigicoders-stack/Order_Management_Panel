@@ -222,6 +222,19 @@ class ApiClient {
     return this.request(`/orders/${orderId}/mark-sent`, options);
   }
 
+  renameContainer(containerId, name) {
+    return this.request(`/containers/${containerId}/rename`, {
+      method: 'PATCH',
+      body: JSON.stringify({ name }),
+    });
+  }
+
+  deleteContainer(containerId) {
+    return this.request(`/containers/${containerId}`, {
+      method: 'DELETE',
+    });
+  }
+
   combineOrders(orderId, targetOrderId) {
     return this.request(`/orders/${orderId}/combine`, {
       method: 'POST',
